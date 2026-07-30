@@ -21,3 +21,6 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Private / Internal planning docs (Untracked)
+docs/session2_team_execution_plan.md
