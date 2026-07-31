@@ -1,0 +1,13 @@
+services:
+  mcp_server_lab:
+    build: .
+    container_name: mcp_server_lab
+    restart: always
+    ports:
+      - "127.0.0.1:8011:8000"
+    networks:
+      - caddy_net
+
+networks:
+  caddy_net:
+    external: true
