@@ -4,23 +4,30 @@ import time
 import json
 from typing import Dict, List, Any, Optional
 
-DB_FILE = os.path.join(os.path.dirname(__file__), "..", "db", "realty_mcp.db")
+def get_db_file_path() -> str:
+    return os.getenv("MCP_DB_FILE", os.path.join(os.path.dirname(__file__), "..", "db", "realty_mcp.db"))
+
 SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "..", "db", "schema.sql")
 SEED_FILE = os.path.join(os.path.dirname(__file__), "..", "db", "seed.sql")
 
 def get_db_connection() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
+    db_file = get_db_file_path()
+    os.makedirs(os.path.dirname(db_file), exist_ok=True)
+    conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 def init_db(reset: bool = False):
     """Initialize database from schema, seed data, and chat history tables."""
-    db_exists = os.path.exists(DB_FILE)
+    db_file = get_db_file_path()
+    db_exists = os.path.exists(db_file)
     if reset and db_exists:
-        os.remove(DB_FILE)
-        db_exists = False
+        try:
+            os.remove(db_file)
+            db_exists = False
+        except Exception:
+            pass
 
     conn = get_db_connection()
     with conn:
@@ -61,6 +68,7 @@ def init_db(reset: bool = False):
 # --- CHAT PERSISTENCE HELPERS ---
 
 def create_chat_session(session_id: str, title: str = "محادثة جديدة", role: str = "property_manager") -> Dict[str, Any]:
+    init_db(reset=False)
     conn = get_db_connection()
     with conn:
         conn.execute("""
@@ -71,6 +79,7 @@ def create_chat_session(session_id: str, title: str = "محادثة جديدة",
     return {"session_id": session_id, "title": title, "role": role}
 
 def get_all_chat_sessions() -> List[Dict[str, Any]]:
+    init_db(reset=False)
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -83,6 +92,7 @@ def get_all_chat_sessions() -> List[Dict[str, Any]]:
     return rows
 
 def get_chat_messages(session_id: str) -> List[Dict[str, Any]]:
+    init_db(reset=False)
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
@@ -121,6 +131,7 @@ def save_chat_message(
     tool_result: Optional[Dict[str, Any]] = None,
     elicitation_payload: Optional[Dict[str, Any]] = None
 ) -> int:
+    init_db(reset=False)
     conn = get_db_connection()
     with conn:
         cur = conn.cursor()
@@ -149,32 +160,39 @@ def save_chat_message(
     return msg_id
 
 def delete_chat_session(session_id: str) -> bool:
+    init_db(reset=False)
     conn = get_db_connection()
     with conn:
-        conn.execute("DELETE FROM chat_messages WHERE session_id = ?;", (session_id,))
         conn.execute("DELETE FROM chat_sessions WHERE session_id = ?;", (session_id,))
     conn.close()
     return True
 
-# --- EXISTING REAL ESTATE DB HELPERS ---
+# --- REPOSITORY DB OPERATIONAL HELPERS ---
 
-def query_available_units(property_id: Optional[int] = None, city: Optional[str] = None) -> List[Dict[str, Any]]:
+def query_available_units(city: Optional[str] = None, min_beds: Optional[int] = None, max_rent: Optional[float] = None, property_id: Optional[int] = None) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     sql = """
-        SELECT u.unit_id, p.name as property_name, p.city, u.unit_number, u.bedrooms, u.monthly_rent, u.status, u.is_high_value
+        SELECT u.unit_id, p.name as property_name, p.city, p.address, u.unit_number, u.bedrooms, u.monthly_rent, u.status, u.is_high_value
         FROM units u
         JOIN properties p ON u.property_id = p.property_id
-        WHERE 1=1
+        WHERE u.status = 'available'
     """
     params = []
-    if property_id:
-        sql += " AND u.property_id = ?"
+    if property_id is not None:
+        sql += " AND p.property_id = ?"
         params.append(property_id)
     if city:
         sql += " AND p.city = ?"
         params.append(city)
-
+    if min_beds is not None:
+        sql += " AND u.bedrooms >= ?"
+        params.append(min_beds)
+    if max_rent is not None:
+        sql += " AND u.monthly_rent <= ?"
+        params.append(max_rent)
+    
     sql += " ORDER BY u.monthly_rent ASC;"
+    
     cur = conn.cursor()
     cur.execute(sql, params)
     rows = [dict(r) for r in cur.fetchall()]
@@ -184,9 +202,8 @@ def query_available_units(property_id: Optional[int] = None, city: Optional[str]
 def query_tenant_lease(email: str) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     sql = """
-        SELECT t.tenant_id, t.full_name, t.email, t.role,
-               l.lease_id, l.unit_id, u.unit_number, p.name as property_name,
-               l.start_date, l.end_date, l.monthly_rent, l.is_active, l.requires_executive_signoff, l.status as lease_status
+        SELECT l.lease_id, t.full_name as tenant_name, t.email, p.name as property_name, u.unit_number,
+               l.monthly_rent, l.start_date, l.end_date, l.status, l.requires_executive_signoff
         FROM tenants t
         LEFT JOIN leases l ON t.tenant_id = l.tenant_id
         LEFT JOIN units u ON l.unit_id = u.unit_id
@@ -199,6 +216,9 @@ def query_tenant_lease(email: str) -> Optional[Dict[str, Any]]:
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
+
+get_available_units = query_available_units
+get_active_lease_by_email = query_tenant_lease
 
 def create_maintenance_record(tenant_id: int, unit_id: int, issue_description: str, priority: str) -> Dict[str, Any]:
     conn = get_db_connection()

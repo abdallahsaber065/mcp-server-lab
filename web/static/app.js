@@ -1,6 +1,6 @@
 /**
- * Cornerstone Realty — MCP Autonomous Portal Client Logic (v3.1.0)
- * Header Selectors, Custom Dropdown Arrows & Smart Bi-directional Text Detection
+ * Cornerstone Realty — MCP Autonomous Portal Client Logic (v3.9.0)
+ * Stable Tool Cards: data-attr toggle, no inline display fighting CSS
  */
 
 const AVAILABLE_MODELS = [
@@ -16,7 +16,7 @@ const AVAILABLE_MODELS = [
   "mistral/mistral-large-latest"
 ];
 
-let activeSessionId = null;
+let activeSessionId = localStorage.getItem('cornerstone_active_session_id') || null;
 
 function initModelDropdown() {
   const select = document.getElementById('modelSelect');
@@ -36,20 +36,11 @@ function autoResizeTextarea(el) {
   el.style.height = Math.min(el.scrollHeight, 140) + 'px';
 }
 
-/**
- * Smart Direction Detection for English vs Arabic Content
- * Filters out HTML tags, entities, numbers, and symbols to inspect raw text.
- */
 function detectTextDirection(htmlOrText) {
   if (!htmlOrText) return '';
-  
-  // Strip HTML tags and entities
   const clean = htmlOrText.replace(/<[^>]*>/g, ' ').replace(/&[^;]+;/g, ' ');
-  
-  // Extract alphabetic characters only
   const latinMatches = clean.match(/[a-zA-Z]/g) || [];
   const arabicMatches = clean.match(/[\u0600-\u06FF]/g) || [];
-
   if (latinMatches.length > arabicMatches.length && latinMatches.length > 5) {
     return 'dir-ltr';
   }
@@ -64,10 +55,11 @@ async function fetchChatSessions() {
     const sessions = await res.json();
     renderSessionListDOM(sessions);
 
-    if (sessions.length > 0 && !activeSessionId) {
-      loadChatSession(sessions[0].session_id);
-    } else if (sessions.length === 0) {
-      createNewChatSession();
+    if (sessions.length > 0) {
+      const existing = sessions.find(s => s.session_id === activeSessionId);
+      await loadChatSession(existing ? existing.session_id : sessions[0].session_id);
+    } else {
+      await createNewChatSession();
     }
   } catch (err) {
     console.error("Failed to fetch chat sessions:", err);
@@ -84,7 +76,11 @@ async function createNewChatSession() {
     });
     const session = await res.json();
     activeSessionId = session.session_id;
-    await fetchChatSessions();
+    localStorage.setItem('cornerstone_active_session_id', activeSessionId);
+
+    const listRes = await fetch('/api/chats');
+    const sessions = await listRes.json();
+    renderSessionListDOM(sessions);
     await loadChatSession(activeSessionId);
   } catch (err) {
     console.error("Failed to create chat session:", err);
@@ -93,6 +89,7 @@ async function createNewChatSession() {
 
 async function loadChatSession(sessionId) {
   activeSessionId = sessionId;
+  localStorage.setItem('cornerstone_active_session_id', sessionId);
   
   document.querySelectorAll('.chat-session-item').forEach(el => {
     el.classList.toggle('active', el.dataset.id === sessionId);
@@ -111,15 +108,10 @@ async function loadChatSession(sessionId) {
       renderMessageDOM('assistant', '<h3>مرحباً بك في نظام Cornerstone Realty الذكي 🏢</h3><p>يمكنك الاستفسار عن الشقق المتاحة، فحص عقود الإيجار، تقديم طلبات الصيانة، أو تعديل قيمة الإيجار مع تفعيل نظام الموافقة البشرية Elicitation.</p>');
     } else {
       messages.forEach(msg => {
-        if (msg.type === 'user') {
-          renderMessageDOM('user', msg.content);
-        } else if (msg.type === 'assistant') {
-          renderMessageDOM('assistant', msg.content);
-        } else if (msg.type === 'tool_trace') {
-          renderToolCardDOM(msg.tool, msg.args, msg.result);
-        } else if (msg.type === 'elicitation') {
-          renderElicitationDOM(msg.payload);
-        }
+        if (msg.type === 'user') renderMessageDOM('user', msg.content);
+        else if (msg.type === 'assistant') renderMessageDOM('assistant', msg.content);
+        else if (msg.type === 'tool_trace') renderToolCardDOM(msg.tool, msg.args, msg.result);
+        else if (msg.type === 'elicitation') renderElicitationDOM(msg.payload);
       });
     }
   } catch (err) {
@@ -133,6 +125,7 @@ async function deleteChatSession(sessionId, event) {
     await fetch(`/api/chats/${sessionId}`, { method: 'DELETE' });
     if (activeSessionId === sessionId) {
       activeSessionId = null;
+      localStorage.removeItem('cornerstone_active_session_id');
     }
     await fetchChatSessions();
   } catch (err) {
@@ -150,7 +143,6 @@ function renderSessionListDOM(sessions) {
     div.className = `chat-session-item ${s.session_id === activeSessionId ? 'active' : ''}`;
     div.dataset.id = s.session_id;
     div.onclick = () => loadChatSession(s.session_id);
-
     div.innerHTML = `
       <div class="session-info">
         <span class="session-title">💬 ${s.title}</span>
@@ -167,9 +159,10 @@ function renderSessionListDOM(sessions) {
 function renderMessageDOM(role, contentHtmlOrText) {
   const history = document.getElementById('chatHistory');
   const div = document.createElement('div');
-  div.className = `msg ${role}`;
+  div.className = `chat-msg-bubble msg ${role}`;
   
   if (role === 'assistant') {
+    div.classList.add('ai-response-content');
     const dirClass = detectTextDirection(contentHtmlOrText);
     if (dirClass) div.classList.add(dirClass);
     div.innerHTML = contentHtmlOrText;
@@ -184,47 +177,68 @@ function renderMessageDOM(role, contentHtmlOrText) {
   return div;
 }
 
+/**
+ * Toggle tool card open/closed using data-open attribute.
+ * Using data attribute avoids inline style vs CSS !important conflicts.
+ */
+function toggleToolCard(headerEl) {
+  const card = headerEl.closest('.tool-card');
+  if (!card) return;
+  const isOpen = card.dataset.open === 'true';
+  card.dataset.open = isOpen ? 'false' : 'true';
+}
+
 function renderToolCardDOM(tool, args, result) {
   const history = document.getElementById('chatHistory');
-  
+  if (!history) return null;
+
   const status = (result && result.status) ? result.status : 'success';
   const isElicitation = (status === 'elicitation_required');
   const badgeClass = isElicitation ? 'tool-badge elicitation' : 'tool-badge';
   const badgeText = isElicitation ? 'ELICITATION' : 'SUCCESS';
 
-  const details = document.createElement('details');
-  details.className = 'tool-card';
-  details.open = false;
+  const toolName = tool || 'unnamed_tool';
+  const argsJson = args ? JSON.stringify(args) : '{}';
+  const argsPreview = argsJson.length > 40 ? argsJson.substring(0, 40) + '…' : argsJson;
 
-  const summary = document.createElement('summary');
-  summary.className = 'tool-card-header';
-  summary.innerHTML = `
-    <div class="tool-info">
-      <span>🛠️ MCP Tool Call: <strong>${tool}</strong></span>
-      <span class="${badgeClass}">${badgeText}</span>
+  // Safely encode JSON for display - escape HTML entities inside pre
+  const escapeHtml = (str) => str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const argsFormatted = escapeHtml(JSON.stringify(args || {}, null, 2));
+  const resultFormatted = escapeHtml(JSON.stringify(result || {}, null, 2));
+
+  const container = document.createElement('div');
+  container.className = 'tool-card';
+  container.dataset.open = 'true'; // Open by default via data attribute
+
+  container.innerHTML = `
+    <div class="tool-card-header" onclick="toggleToolCard(this)">
+      <div class="tool-info">
+        <span class="tool-emoji">🛠️</span>
+        <span class="tool-name-title">MCP Tool: <strong>${toolName}</strong></span>
+        <span class="tool-args-preview">${argsPreview}</span>
+        <span class="${badgeClass}">${badgeText}</span>
+      </div>
+      <span class="toggle-icon">▼</span>
     </div>
-    <span class="toggle-icon">▼</span>
+    <div class="tool-card-body">
+      <div class="tool-section">
+        <div class="tool-section-title">📥 Input Parameters</div>
+        <pre class="json-block">${argsFormatted}</pre>
+      </div>
+      <div class="tool-section">
+        <div class="tool-section-title">📤 Output Result</div>
+        <pre class="json-block">${resultFormatted}</pre>
+      </div>
+    </div>
   `;
 
-  const body = document.createElement('div');
-  body.className = 'tool-card-body';
-  body.innerHTML = `
-    <div>
-      <div class="tool-section-title">📥 Input Parameters</div>
-      <div class="json-block">${JSON.stringify(args, null, 2)}</div>
-    </div>
-    <div>
-      <div class="tool-section-title">📤 Output Result</div>
-      <div class="json-block">${JSON.stringify(result, null, 2)}</div>
-    </div>
-  `;
-
-  details.appendChild(summary);
-  details.appendChild(body);
-
-  history.appendChild(details);
+  history.appendChild(container);
   history.scrollTop = history.scrollHeight;
-  return details;
+  return container;
 }
 
 function renderElicitationDOM(payload) {
@@ -247,9 +261,7 @@ function renderElicitationDOM(payload) {
 // --- SSE STREAM CHAT CONTROLLER ---
 
 async function sendChatMessageStream() {
-  if (!activeSessionId) {
-    await createNewChatSession();
-  }
+  if (!activeSessionId) await createNewChatSession();
 
   const inputEl = document.getElementById('userInput');
   const text = inputEl.value.trim();
@@ -291,67 +303,56 @@ async function sendChatMessageStream() {
       buffer = lines.pop();
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6).trim();
-          if (!dataStr) continue;
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const dataStr = trimmed.slice(6).trim();
+        if (!dataStr) continue;
 
-          try {
-            const event = JSON.parse(dataStr);
+        try {
+          const event = JSON.parse(dataStr);
 
-            if (event.type === 'tool_call') {
-              currentAssistantBubble = null;
-              fullAssistantText = '';
-              renderToolCardDOM(event.tool, event.args, event.result);
+          if (event.type === 'tool_call') {
+            // Finalize any in-progress assistant bubble before showing tool
+            currentAssistantBubble = null;
+            fullAssistantText = '';
+            renderToolCardDOM(event.tool, event.args, event.result);
 
-            } else if (event.type === 'token') {
-              if (!currentAssistantBubble) {
-                currentAssistantBubble = renderMessageDOM('assistant', '');
-              }
-              fullAssistantText += event.content;
-              
-              // Dynamically check text direction as tokens stream
-              const dirClass = detectTextDirection(fullAssistantText);
-              if (dirClass) {
-                currentAssistantBubble.classList.add(dirClass);
-              } else {
-                currentAssistantBubble.classList.remove('dir-ltr');
-              }
-              
-              currentAssistantBubble.innerHTML = fullAssistantText;
-              const history = document.getElementById('chatHistory');
-              history.scrollTop = history.scrollHeight;
-
-            } else if (event.type === 'elicitation_required') {
-              renderElicitationDOM(event.payload);
-
-            } else if (event.type === 'fallback') {
-              if (!currentAssistantBubble) {
-                currentAssistantBubble = renderMessageDOM('assistant', '');
-              }
-              fullAssistantText = event.content;
-              currentAssistantBubble.innerHTML = fullAssistantText;
+          } else if (event.type === 'token') {
+            if (!currentAssistantBubble) {
+              currentAssistantBubble = renderMessageDOM('assistant', '');
             }
-          } catch (e) {
-            console.error("SSE JSON Parse Error:", e, dataStr);
+            fullAssistantText += event.content;
+            const dirClass = detectTextDirection(fullAssistantText);
+            if (dirClass) currentAssistantBubble.classList.add(dirClass);
+            else currentAssistantBubble.classList.remove('dir-ltr');
+            currentAssistantBubble.innerHTML = fullAssistantText;
+            document.getElementById('chatHistory').scrollTop = 999999;
+
+          } else if (event.type === 'elicitation_required') {
+            renderElicitationDOM(event.payload);
+
+          } else if (event.type === 'fallback') {
+            if (!currentAssistantBubble) currentAssistantBubble = renderMessageDOM('assistant', '');
+            currentAssistantBubble.innerHTML = event.content;
           }
+        } catch (e) {
+          console.error("SSE Parse Error:", e, dataStr);
         }
       }
     }
 
-    fetchChatSessions();
+    // Refresh sidebar titles without resetting DOM
+    const sessions = await (await fetch('/api/chats')).json();
+    renderSessionListDOM(sessions);
 
   } catch (err) {
-    if (!currentAssistantBubble) {
-      currentAssistantBubble = renderMessageDOM('assistant', '');
-    }
-    currentAssistantBubble.innerHTML = '<p>⚠️ حدث خطأ في الاتصال بالخادم: ' + err.message + '</p>';
+    if (!currentAssistantBubble) currentAssistantBubble = renderMessageDOM('assistant', '');
+    currentAssistantBubble.innerHTML = '<p>⚠️ خطأ في الاتصال: ' + err.message + '</p>';
   }
 }
 
 async function respondElicitation(leaseId, proposedRent, approved) {
-  const card = document.getElementById('activeElicitation');
-  if (card) card.remove();
-
+  document.getElementById('activeElicitation')?.remove();
   try {
     const res = await fetch('/api/elicitation/respond', {
       method: 'POST',
@@ -363,7 +364,6 @@ async function respondElicitation(leaseId, proposedRent, approved) {
         approved: approved
       })
     });
-
     const data = await res.json();
     renderMessageDOM('assistant', data.final_answer);
   } catch (err) {
@@ -374,8 +374,7 @@ async function respondElicitation(leaseId, proposedRent, approved) {
 function onRoleChange() {
   const role = document.getElementById('roleSelect').value;
   document.getElementById('notifStatus').innerText = 'PUSH SENT (' + role.toUpperCase() + ')';
-  const msgHtml = `<h3>ℹ️ تم تغيير صلاحيات المستخدم</h3><p>الدور الجديد: <strong>${role}</strong>. تم إرسال إشعار <code>notifications/tools/list_changed</code> لتحديث قائمة الأدوات تلقائياً.</p>`;
-  renderMessageDOM('assistant', msgHtml);
+  renderMessageDOM('assistant', `<h3>ℹ️ تم تغيير صلاحيات المستخدم</h3><p>الدور الجديد: <strong>${role}</strong>. تم إرسال إشعار <code>notifications/tools/list_changed</code>.</p>`);
 }
 
 function handleKeyDown(e) {

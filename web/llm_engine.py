@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Dict, Any, List, Optional, AsyncGenerator
 import litellm
 
@@ -185,14 +186,12 @@ class MCPLLMEngine:
                         continue
                     delta = chunk.choices[0].delta
                     
-                    # 1. Accumulate stream text tokens
                     content_chunk = getattr(delta, "content", None)
                     if content_chunk:
                         full_text += content_chunk
                         event_payload = json.dumps({"type": "token", "content": content_chunk}, ensure_ascii=False)
                         yield f"data: {event_payload}\n\n"
 
-                    # 2. Robust tool calls delta accumulation (supporting index or direct list)
                     tool_calls_delta = getattr(delta, "tool_calls", None)
                     if tool_calls_delta:
                         for tc in tool_calls_delta:
@@ -213,7 +212,6 @@ class MCPLLMEngine:
                                 if fn_args:
                                     tool_calls_accumulator[idx]["arguments"] += fn_args
 
-                # Process accumulated tool calls
                 if tool_calls_accumulator:
                     assistant_msg = {
                         "role": "assistant",
@@ -237,10 +235,8 @@ class MCPLLMEngine:
                         except Exception:
                             args = {}
 
-                        # Execute tool on MCP server instance
                         tool_result = mcp_server_instance.call_tool(tool_name, args)
                         
-                        # Emit tool_call event via SSE
                         tool_event = json.dumps({
                             "type": "tool_call",
                             "tool": tool_name,
@@ -265,7 +261,6 @@ class MCPLLMEngine:
                             "content": json.dumps(tool_result, ensure_ascii=False)
                         })
                 else:
-                    # Final assistant message completed
                     if full_text:
                         messages.append({"role": "assistant", "content": full_text})
                     done_event = json.dumps({"type": "done", "final_answer": full_text}, ensure_ascii=False)

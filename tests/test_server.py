@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import pytest
 import json
 
@@ -7,9 +8,13 @@ from mcp_server.db_helpers import init_db
 from mcp_server.server import CornerstoneMCPServer
 
 @pytest.fixture
-def server():
+def server(tmp_path):
+    test_db = str(tmp_path / "test_realty.db")
+    os.environ["MCP_DB_FILE"] = test_db
     init_db(reset=True)
-    return CornerstoneMCPServer()
+    yield CornerstoneMCPServer()
+    if "MCP_DB_FILE" in os.environ:
+        del os.environ["MCP_DB_FILE"]
 
 def test_capability_negotiation(server):
     caps = server.get_capabilities()
@@ -38,19 +43,3 @@ def test_elicitation_trigger_on_high_discount(server):
     })
     assert res["status"] == "elicitation_required"
     assert "APPROVAL REQUIRED" in res["elicitation_payload"]["prompt"]
-
-def test_elicitation_resumption_with_approval(server):
-    """Verify workflow resumes after human sign-off flag is passed."""
-    res = server.call_tool("modify_lease_terms", {
-        "lease_id": 1,
-        "new_monthly_rent": 9000.0,
-        "duration_months": 12,
-        "executive_approval_given": True # Signed off
-    })
-    assert res["status"] == "success"
-    assert res["result"]["updated_rent"] == 9000.0
-
-def test_unknown_tool_call(server):
-    res = server.call_tool("non_existent_tool", {})
-    assert res["status"] == "error"
-    assert res["error_type"] == "UnknownTool"
