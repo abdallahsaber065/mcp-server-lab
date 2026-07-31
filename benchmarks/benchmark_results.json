@@ -1,0 +1,130 @@
+{
+  "metadata": {
+    "server_name": "cornerstone-realty-mcp",
+    "version": "1.0.0",
+    "protocol_version": "2025-06-18",
+    "total_trials_per_operation": 5,
+    "timestamp": "2026-07-31 17:09:54"
+  },
+  "operations": [
+    {
+      "operation": "initialize_handshake",
+      "trial_count": 5,
+      "avg_latency_ms": 0.002,
+      "min_latency_ms": 0.001,
+      "max_latency_ms": 0.004,
+      "statuses": [
+        "success"
+      ],
+      "sample_latencies_ms": [
+        0.004,
+        0.004,
+        0.001,
+        0.001,
+        0.001
+      ]
+    },
+    {
+      "operation": "list_tools_discovery",
+      "trial_count": 5,
+      "avg_latency_ms": 2.665,
+      "min_latency_ms": 1.532,
+      "max_latency_ms": 6.307,
+      "statuses": [
+        "success"
+      ],
+      "sample_latencies_ms": [
+        6.307,
+        1.532,
+        2.072,
+        1.546,
+        1.867
+      ]
+    },
+    {
+      "operation": "read_lease_policy_resource",
+      "trial_count": 5,
+      "avg_latency_ms": 0.015,
+      "min_latency_ms": 0.006,
+      "max_latency_ms": 0.031,
+      "statuses": [
+        "success"
+      ],
+      "sample_latencies_ms": [
+        0.031,
+        0.014,
+        0.009,
+        0.015,
+        0.006
+      ]
+    },
+    {
+      "operation": "query_available_units",
+      "trial_count": 5,
+      "avg_latency_ms": 0.705,
+      "min_latency_ms": 0.577,
+      "max_latency_ms": 1.112,
+      "statuses": [
+        "success"
+      ],
+      "sample_latencies_ms": [
+        1.112,
+        0.672,
+        0.577,
+        0.578,
+        0.587
+      ]
+    },
+    {
+      "operation": "submit_maintenance_request",
+      "trial_count": 5,
+      "avg_latency_ms": 14.483,
+      "min_latency_ms": 13.064,
+      "max_latency_ms": 15.484,
+      "statuses": [
+        "success"
+      ],
+      "sample_latencies_ms": [
+        13.064,
+        14.921,
+        15.484,
+        14.575,
+        14.371
+      ]
+    },
+    {
+      "operation": "modify_lease_terms_elicitation",
+      "trial_count": 5,
+      "avg_latency_ms": 0.815,
+      "min_latency_ms": 0.517,
+      "max_latency_ms": 1.723,
+      "statuses": [
+        "elicitation_required"
+      ],
+      "sample_latencies_ms": [
+        1.723,
+        0.674,
+        0.596,
+        0.567,
+        0.517
+      ]
+    },
+    {
+      "operation": "run_property_audit_progress",
+      "trial_count": 5,
+      "avg_latency_ms": 1.063,
+      "min_latency_ms": 0.872,
+      "max_latency_ms": 1.397,
+      "statuses": [
+        "success"
+      ],
+      "sample_latencies_ms": [
+        0.967,
+        0.916,
+        1.397,
+        1.165,
+        0.872
+      ]
+    }
+  ]
+}
