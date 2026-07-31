@@ -1,0 +1,54 @@
+erDiagram
+    PROPERTIES {
+        INTEGER property_id PK
+        TEXT name
+        TEXT address
+        TEXT city
+        INTEGER total_units
+        DATETIME created_at
+    }
+    UNITS {
+        INTEGER unit_id PK
+        INTEGER property_id FK
+        TEXT unit_number
+        INTEGER bedrooms
+        REAL monthly_rent
+        TEXT status
+        INTEGER is_high_value
+        DATETIME created_at
+    }
+    TENANTS {
+        INTEGER tenant_id PK
+        TEXT full_name
+        TEXT email
+        TEXT phone
+        TEXT role
+        DATETIME created_at
+    }
+    LEASES {
+        INTEGER lease_id PK
+        INTEGER unit_id FK
+        INTEGER tenant_id FK
+        DATE start_date
+        DATE end_date
+        REAL monthly_rent
+        INTEGER is_active
+        INTEGER requires_executive_signoff
+        TEXT status
+        DATETIME created_at
+    }
+    MAINTENANCE_REQUESTS {
+        INTEGER request_id PK
+        INTEGER unit_id FK
+        INTEGER tenant_id FK
+        TEXT issue_description
+        TEXT priority
+        TEXT status
+        DATETIME created_at
+    }
+
+    PROPERTIES ||--o{ UNITS : "has"
+    UNITS ||--o{ LEASES : "leases"
+    TENANTS ||--o{ LEASES : "signs"
+    UNITS ||--o{ MAINTENANCE_REQUESTS : "needs"
+    TENANTS ||--o{ MAINTENANCE_REQUESTS : "files"
