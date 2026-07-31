@@ -1,0 +1,19 @@
+{
+  "policy_name": "Residential Lease Terms",
+  "applicable_cities": ["Cairo", "Alexandria", "Giza"],
+  "minimum_lease_months": 6,
+  "maximum_lease_months": 24,
+  "deposit_multiplier": 2,
+  "late_fee_percentage": 2.5,
+  "notice_period_days": 90,
+  "executive_signoff_threshold": {
+    "monthly_rent": 50000.0,
+    "requires_signoff": true
+  },
+  "allowed_payment_methods": ["bank_transfer", "cash", "credit_card"],
+  "tenant_obligations": [
+    "pay rent on time",
+    "maintain unit condition",
+    "report maintenance issues promptly"
+  ]
+}
