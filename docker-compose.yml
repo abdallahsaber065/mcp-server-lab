@@ -1,8 +1,10 @@
 services:
   mcp_server_lab:
-    build: .
+    image: ghcr.io/abdallahsaber065/mcp-server-lab:latest
     container_name: mcp_server_lab
     restart: always
+    env_file:
+      - .env
     ports:
       - "127.0.0.1:8011:8000"
     networks:
