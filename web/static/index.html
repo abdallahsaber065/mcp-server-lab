@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
+<body dir="rtl">
   <div class="app-viewport">
 
     <div class="grid-layout">
@@ -37,7 +37,7 @@
           </div>
         </div>
 
-        <!-- Protocol Concerns Status (Aligned Left for Values) -->
+        <!-- Protocol Concerns Status -->
         <div class="card" style="flex: 1;">
           <div class="card-title" style="text-align: right;">🔌 Protocol Concerns Live</div>
           <ul class="caps-list">
@@ -79,7 +79,7 @@
       </div>
 
       <!-- Main Chat Container -->
-      <div class="card chat-box">
+      <div class="card chat-box" dir="ltr">
         
         <!-- Chat Header Bar with Role and Model Selectors -->
         <div class="chat-header">
@@ -113,7 +113,7 @@
           <!-- Populated from SQLite DB via app.js -->
         </div>
 
-        <!-- Chat Input Area with Sleek Dark Glass Styling -->
+        <!-- Chat Input Area -->
         <div class="chat-input-area">
           <textarea id="userInput" rows="1" class="form-control chat-input" placeholder="اكتب سؤالك أو طلبك هنا (مثال: ابحث عن الشقق المتاحة في القاهرة)..." onkeydown="handleKeyDown(event)" oninput="autoResizeTextarea(this)"></textarea>
           <button class="btn" onclick="sendChatMessageStream()">إرسال</button>

@@ -3,6 +3,7 @@ import sys
 import json
 import uuid
 import asyncio
+import logging
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -10,19 +11,22 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+logger = logging.getLogger("mcp_web_app")
+
+# Add workspace root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from mcp_server.server import CornerstoneMCPServer
-from mcp_server.llm_engine import MCPLLMEngine, AVAILABLE_MODELS
 from mcp_server.db_helpers import (
     create_chat_session, get_all_chat_sessions, get_chat_messages,
     save_chat_message, delete_chat_session
 )
+from web.llm_engine import MCPLLMEngine, AVAILABLE_MODELS
 
 app = FastAPI(
     title="Cornerstone Realty Group — MCP Autonomous Portal",
     description="Interactive Web UI & FastAPI backend for MCP Server Lab (Session 2)",
-    version="3.0.0"
+    version="3.5.0"
 )
 
 app.add_middleware(
@@ -36,7 +40,7 @@ app.add_middleware(
 mcp_server = CornerstoneMCPServer()
 llm_engine = MCPLLMEngine(default_model="gemini/gemini-2.5-flash")
 
-static_dir = os.path.join(os.path.dirname(__file__), "web_static")
+static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -62,10 +66,13 @@ def build_system_prompt(role: str) -> str:
     return (
         f"You are the Cornerstone Realty Autonomous AI Assistant for role '{role}'. "
         "Help property managers and tenants lookup available units, active lease agreements, "
-        "submit maintenance requests, and modify lease terms using available MCP tools. "
-        "Adhere strictly to Cornerstone Master Leasing Policy.\n\n"
+        "submit maintenance requests, and modify lease terms using available MCP tools.\n\n"
+        "CRITICAL TOOL USAGE RULE:\n"
+        "Whenever the user asks to search, query, view, or check available units, active leases, maintenance requests, or property terms, "
+        "you MUST invoke the appropriate MCP tool (e.g., lookup_available_units, get_tenant_lease, etc.) to query real database facts before giving your answer. "
+        "Do NOT answer from parametric memory or assume unit availability without calling the MCP tool.\n\n"
         "OUTPUT FORMAT INSTRUCTIONS:\n"
-        "Format your responses strictly using clean, semantic skeleton HTML tags without markdown block wrappers or <html>/<body> boilerplate. "
+        "Format your final text responses strictly using clean, semantic skeleton HTML tags without markdown block wrappers or <html>/<body> boilerplate. "
         "Use <h3> for titles, <p> for paragraphs, <ul>/<li> for lists, <strong> for emphasis, and <table>/<thead>/<tbody>/<tr>/<th>/<td> for structured data tables. "
         "This ensures rich visual rendering inside the portal chat interface."
     )
@@ -78,35 +85,28 @@ async def get_index():
             return HTMLResponse(content=f.read())
     return HTMLResponse(content="<h1>Cornerstone MCP Portal Initialized</h1>")
 
-# --- SQLITE CHAT SESSION MANAGEMENT ENDPOINTS ---
-
 @app.get("/api/chats")
 async def list_chats():
-    """List all saved chat sessions from SQLite database."""
     return get_all_chat_sessions()
 
 @app.post("/api/chats")
 async def create_chat(req: CreateSessionRequest):
-    """Create a new chat session in SQLite DB."""
     session_id = f"session_{uuid.uuid4().hex[:12]}"
     session_data = create_chat_session(session_id=session_id, title=req.title, role=req.role)
     return session_data
 
 @app.get("/api/chats/{session_id}")
 async def get_chat(session_id: str):
-    """Load messages for a specific chat session from SQLite DB."""
     messages = get_chat_messages(session_id)
     return {"session_id": session_id, "messages": messages}
 
 @app.delete("/api/chats/{session_id}")
 async def delete_chat(session_id: str):
-    """Delete a chat session and its messages from SQLite DB."""
     success = delete_chat_session(session_id)
     return {"status": "success" if success else "error"}
 
 @app.get("/api/models")
 async def get_models():
-    """Return available free LLM models."""
     return {"models": AVAILABLE_MODELS, "default": "gemini/gemini-2.5-flash"}
 
 @app.get("/api/capabilities")
@@ -130,17 +130,24 @@ async def read_resource(uri: str = "realty://policies/lease_terms"):
 
 @app.post("/api/chat/stream")
 async def chat_stream_endpoint(req: StreamChatRequest):
-    """SSE Streaming Chat Endpoint with SQLite message persistence."""
-    # 1. Save user prompt to SQLite
+    # Fetch prior history from SQLite for multi-turn context
+    prior_db_messages = get_chat_messages(req.session_id)
+    history_for_llm = []
+    for m in prior_db_messages:
+        if m["type"] == "user" and m.get("content"):
+            history_for_llm.append({"role": "user", "content": m["content"]})
+        elif m["type"] == "assistant" and m.get("content"):
+            history_for_llm.append({"role": "assistant", "content": m["content"]})
+
+    # Save current user prompt to SQLite
     save_chat_message(session_id=req.session_id, msg_type="user", content=req.user_message)
-    
     system_prompt = build_system_prompt(req.role)
     
     stream_gen = llm_engine.execute_agent_loop_stream(
         mcp_server_instance=mcp_server,
         user_message=req.user_message,
         system_prompt=system_prompt,
-        conversation_history=req.conversation_history,
+        conversation_history=history_for_llm,
         model=req.model,
         role=req.role
     )
@@ -149,10 +156,9 @@ async def chat_stream_endpoint(req: StreamChatRequest):
         full_assistant_text = ""
         async for chunk in stream_gen:
             yield chunk
-            # Parse event chunk to save tool calls / assistant text to DB
             if chunk.startswith("data: "):
                 try:
-                    event = json.loads(chunk[6:].trim() if hasattr(chunk[6:], 'trim') else chunk[6:].strip())
+                    event = json.loads(chunk[6:].strip())
                     if event.get("type") == "tool_call":
                         save_chat_message(
                             session_id=req.session_id,
@@ -172,8 +178,8 @@ async def chat_stream_endpoint(req: StreamChatRequest):
                     elif event.get("type") == "done":
                         if full_assistant_text:
                             save_chat_message(session_id=req.session_id, msg_type="assistant", content=full_assistant_text)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error parsing/saving SSE event to DB: {e}")
 
     return StreamingResponse(
         sse_wrapper(),
@@ -183,7 +189,6 @@ async def chat_stream_endpoint(req: StreamChatRequest):
 
 @app.post("/api/elicitation/respond")
 async def respond_elicitation(req: ElicitationResponse):
-    """Resume tool execution after human sign-off decision."""
     res = mcp_server.call_tool("modify_lease_terms", {
         "lease_id": req.lease_id,
         "new_monthly_rent": req.proposed_rent,
@@ -206,4 +211,4 @@ async def respond_elicitation(req: ElicitationResponse):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("mcp_server.web_app:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("web.app:app", host="127.0.0.1", port=8000, reload=True)

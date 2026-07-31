@@ -6,11 +6,19 @@
 
 ---
 
+## ⭐️ BONUS PRODUCTION FEATURES
+> [!NOTE]
+> In addition to fulfilling all 13 required MCP rubric categories and 8 protocol concerns, this repository includes an **interactive FastAPI Web Application & UI Portal** (`web/app.py`) built as a **production-grade bonus enhancement**.
+> - **Provider-Agnostic LLM Engine** (`web/llm_engine.py`): Connects 10+ free models (Gemini, Mistral, CodeStral, Gemma) to the MCP server via LiteLLM.
+> - **Interactive Web Portal** (`web/static/`): Dark-mode glassmorphism UI supporting live Server-Sent Events (SSE) streaming, interactive Human Elicitation sign-off cards, auto-resizing textareas, and persistent SQLite chat thread management.
+
+---
+
 ## 👥 Team Members & Contribution Split
 
 | Name | GitHub Username | Role & Primary Contributions |
 | :--- | :--- | :--- |
-| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead**: FastMCP Server Core, Provider-Agnostic LLM Engine (`mcp_server/llm_engine.py`), FastAPI Web Application (`mcp_server/web_app.py`), Capability Negotiation, Human Elicitation (`elicitation/create`), Defensive Pydantic Specs (`extra="forbid"`), Master Pytest Suite, Benchmark Instrumentation, and Tradeoff Analysis |
+| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead**: FastMCP Server Core, Provider-Agnostic LLM Engine (`web/llm_engine.py`), FastAPI Web Application (`web/app.py`), Capability Negotiation, Human Elicitation (`elicitation/create`), Defensive Pydantic Specs (`extra="forbid"`), Master Pytest Suite, Benchmark Instrumentation, and Tradeoff Analysis |
 | **Omar Tamer** | [`omar-tamer976`](https://github.com/omar-tamer976) | **Database & Policy Owner**: Relational Schema DDL (`db/schema.sql`), Seed Data (`db/seed.sql`), ERD Diagram (`db/erd.mermaid`), Lease Policy Resource (`resources/read`), Prompt Templates (`prompts/get`), and DB Tests (`tests/test_database.py`) |
 | **Ahmed Wael** | [`ahmedeladawy16`](https://github.com/ahmedeladawy16) | **Client Agent & Protocol Owner**: MCP Client Agent (`agent/client.py`), Tool List Change Notifications (`tools/list_changed`), Progress Tracking (`progressToken`), and Client Integration Tests (`tests/test_client.py`) |
 
@@ -137,11 +145,11 @@ All benchmark metrics are recorded over 5 reproducible trials per operation and 
 uv run pytest tests/
 ```
 
-### 2. Run Interactive Web Portal (FastAPI + LiteLLM UI)
+### 2. Run Interactive Web Portal (Bonus Feature: FastAPI + LiteLLM UI)
 ```powershell
-uv run python mcp_server/web_app.py
+uv run python web/app.py
 ```
-*Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to chat with any LLM model over the MCP server with live Elicitation and Tool Tracing UI.*
+*Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to chat with any LLM model over the MCP server with live Elicitation, SQLite Multi-Chat history, and Tool Tracing UI.*
 
 ### 3. Run Performance Benchmark Suite
 ```powershell
