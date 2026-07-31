@@ -4,126 +4,126 @@
     "version": "1.0.0",
     "protocol_version": "2025-06-18",
     "total_trials_per_operation": 5,
-    "timestamp": "2026-07-31 17:09:54"
+    "timestamp": "2026-07-31 18:18:46"
   },
   "operations": [
     {
       "operation": "initialize_handshake",
       "trial_count": 5,
-      "avg_latency_ms": 0.002,
-      "min_latency_ms": 0.001,
-      "max_latency_ms": 0.004,
+      "avg_latency_ms": 0.004,
+      "min_latency_ms": 0.002,
+      "max_latency_ms": 0.006,
       "statuses": [
         "success"
       ],
       "sample_latencies_ms": [
-        0.004,
-        0.004,
-        0.001,
-        0.001,
-        0.001
+        0.006,
+        0.006,
+        0.003,
+        0.002,
+        0.002
       ]
     },
     {
       "operation": "list_tools_discovery",
       "trial_count": 5,
-      "avg_latency_ms": 2.665,
-      "min_latency_ms": 1.532,
-      "max_latency_ms": 6.307,
+      "avg_latency_ms": 5.302,
+      "min_latency_ms": 1.777,
+      "max_latency_ms": 17.822,
       "statuses": [
         "success"
       ],
       "sample_latencies_ms": [
-        6.307,
-        1.532,
-        2.072,
-        1.546,
-        1.867
+        17.822,
+        1.777,
+        2.671,
+        2.417,
+        1.822
       ]
     },
     {
       "operation": "read_lease_policy_resource",
       "trial_count": 5,
-      "avg_latency_ms": 0.015,
-      "min_latency_ms": 0.006,
-      "max_latency_ms": 0.031,
+      "avg_latency_ms": 0.019,
+      "min_latency_ms": 0.008,
+      "max_latency_ms": 0.035,
       "statuses": [
         "success"
       ],
       "sample_latencies_ms": [
         0.031,
-        0.014,
-        0.009,
-        0.015,
-        0.006
+        0.013,
+        0.008,
+        0.008,
+        0.035
       ]
     },
     {
       "operation": "query_available_units",
       "trial_count": 5,
-      "avg_latency_ms": 0.705,
-      "min_latency_ms": 0.577,
-      "max_latency_ms": 1.112,
+      "avg_latency_ms": 0.845,
+      "min_latency_ms": 0.672,
+      "max_latency_ms": 1.118,
       "statuses": [
         "success"
       ],
       "sample_latencies_ms": [
-        1.112,
+        1.118,
+        0.808,
         0.672,
-        0.577,
-        0.578,
-        0.587
+        0.733,
+        0.893
       ]
     },
     {
       "operation": "submit_maintenance_request",
       "trial_count": 5,
-      "avg_latency_ms": 14.483,
-      "min_latency_ms": 13.064,
-      "max_latency_ms": 15.484,
+      "avg_latency_ms": 17.1,
+      "min_latency_ms": 15.842,
+      "max_latency_ms": 17.783,
       "statuses": [
         "success"
       ],
       "sample_latencies_ms": [
-        13.064,
-        14.921,
-        15.484,
-        14.575,
-        14.371
+        17.748,
+        17.783,
+        16.758,
+        17.37,
+        15.842
       ]
     },
     {
       "operation": "modify_lease_terms_elicitation",
       "trial_count": 5,
-      "avg_latency_ms": 0.815,
-      "min_latency_ms": 0.517,
-      "max_latency_ms": 1.723,
+      "avg_latency_ms": 1.142,
+      "min_latency_ms": 0.647,
+      "max_latency_ms": 2.512,
       "statuses": [
         "elicitation_required"
       ],
       "sample_latencies_ms": [
-        1.723,
-        0.674,
-        0.596,
-        0.567,
-        0.517
+        2.512,
+        1.127,
+        0.726,
+        0.7,
+        0.647
       ]
     },
     {
       "operation": "run_property_audit_progress",
       "trial_count": 5,
-      "avg_latency_ms": 1.063,
-      "min_latency_ms": 0.872,
-      "max_latency_ms": 1.397,
+      "avg_latency_ms": 0.717,
+      "min_latency_ms": 0.628,
+      "max_latency_ms": 0.843,
       "statuses": [
         "success"
       ],
       "sample_latencies_ms": [
-        0.967,
-        0.916,
-        1.397,
-        1.165,
-        0.872
+        0.781,
+        0.843,
+        0.682,
+        0.651,
+        0.628
       ]
     }
   ]
