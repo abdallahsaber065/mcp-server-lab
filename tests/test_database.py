@@ -51,19 +51,19 @@ def test_foreign_key_constraints(in_memory_db):
 
 def test_seed_data_counts(in_memory_db):
     cursor = in_memory_db.execute("SELECT COUNT(*) FROM properties")
-    assert cursor.fetchone()[0] == 3
+    assert cursor.fetchone()[0] == 5
 
     cursor = in_memory_db.execute("SELECT COUNT(*) FROM units")
-    assert cursor.fetchone()[0] == 6
+    assert cursor.fetchone()[0] == 18
 
     cursor = in_memory_db.execute("SELECT COUNT(*) FROM tenants")
-    assert cursor.fetchone()[0] == 4
+    assert cursor.fetchone()[0] == 8
 
     cursor = in_memory_db.execute("SELECT COUNT(*) FROM leases")
-    assert cursor.fetchone()[0] == 3
+    assert cursor.fetchone()[0] == 8
 
     cursor = in_memory_db.execute("SELECT COUNT(*) FROM maintenance_requests")
-    assert cursor.fetchone()[0] == 2
+    assert cursor.fetchone()[0] == 6
 
 
 def test_lease_date_check(in_memory_db):
