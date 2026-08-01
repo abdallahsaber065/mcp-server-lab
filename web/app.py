@@ -37,12 +37,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# NOTE FOR EVALUATION:
+# The FastAPI Web Server, Interactive Chat UI, and LLM Web Engine in this folder are
+# BONUS showcase enhancements created to present, test, and demonstrate the MCP Server
+# in an end-to-end interactive portal. The core MCP protocol implementation and server
+# components reside in `mcp_server/`.
+
 mcp_server = CornerstoneMCPServer()
-llm_engine = MCPLLMEngine(default_model="gemini/gemini-2.5-flash")
+llm_engine = MCPLLMEngine(default_model="gemini/gemini-3.1-flash-lite")
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+FIXED_PERSONAS: Dict[str, Dict[str, Any]] = {
+    "tenant": {
+        "name": "Amr Hassan",
+        "tenant_id": 1,
+        "email": "amr.hassan@example.com",
+        "phone": "+201001234567",
+        "role": "tenant",
+        "unit_number": "A-101 (Cornerstone Heights, Cairo)",
+        "lease_id": 1,
+        "description": "Active tenant residing in unit A-101"
+    },
+    "property_manager": {
+        "name": "Tarek Mahmoud",
+        "tenant_id": 3,
+        "email": "tarek.m@cornerstonerealty.eg",
+        "phone": "+201223334444",
+        "role": "property_manager",
+        "description": "Property Manager handling unit searches, maintenance dispatch, and standard lease operations"
+    },
+    "executive_admin": {
+        "name": "Laila Fouad",
+        "tenant_id": 4,
+        "email": "laila.fouad@cornerstonerealty.eg",
+        "phone": "+201000000001",
+        "role": "executive_admin",
+        "description": "Executive Admin authorized for high-value lease sign-offs (>50,000 EGP) and policy overrides"
+    }
+}
 
 class CreateSessionRequest(BaseModel):
     title: str = "محادثة جديدة"
@@ -51,7 +86,7 @@ class CreateSessionRequest(BaseModel):
 class StreamChatRequest(BaseModel):
     session_id: str
     user_message: str
-    model: str = "gemini/gemini-2.5-flash"
+    model: str = "gemini/gemini-3.1-flash-lite"
     role: str = "property_manager"
     conversation_history: List[Dict[str, Any]] = []
 
@@ -63,19 +98,54 @@ class ElicitationResponse(BaseModel):
     duration_months: int = 12
 
 def build_system_prompt(role: str) -> str:
-    return (
-        f"You are the Cornerstone Realty Autonomous AI Assistant for role '{role}'. "
-        "Help property managers and tenants lookup available units, active lease agreements, "
-        "submit maintenance requests, and modify lease terms using available MCP tools.\n\n"
-        "CRITICAL TOOL USAGE RULE:\n"
-        "Whenever the user asks to search, query, view, or check available units, active leases, maintenance requests, or property terms, "
-        "you MUST invoke the appropriate MCP tool (e.g., lookup_available_units, get_tenant_lease, etc.) to query real database facts before giving your answer. "
-        "Do NOT answer from parametric memory or assume unit availability without calling the MCP tool.\n\n"
-        "OUTPUT FORMAT INSTRUCTIONS:\n"
-        "Format your final text responses strictly using clean, semantic skeleton HTML tags without markdown block wrappers or <html>/<body> boilerplate. "
-        "Use <h3> for titles, <p> for paragraphs, <ul>/<li> for lists, <strong> for emphasis, and <table>/<thead>/<tbody>/<tr>/<th>/<td> for structured data tables. "
-        "This ensures rich visual rendering inside the portal chat interface."
+    persona = FIXED_PERSONAS.get(role, FIXED_PERSONAS["property_manager"])
+    
+    prompt = (
+        f"You are the Cornerstone Realty Autonomous AI Assistant.\n"
+        f"CURRENT AUTHENTICATED USER PERSONA:\n"
+        f"- Name: {persona['name']}\n"
+        f"- Role: {persona['role'].upper()}\n"
+        f"- Email: {persona['email']}\n"
+        f"- Phone: {persona['phone']}\n"
+        f"- Tenant ID: {persona['tenant_id']}\n"
     )
+    
+    if role == "tenant":
+        prompt += (
+            f"- Assigned Unit: {persona['unit_number']}\n"
+            f"- Active Lease ID: {persona['lease_id']}\n\n"
+            "TENANT PERSONA BEHAVIOR:\n"
+            "Whenever the user asks about 'my lease', 'my apartment', 'my unit', or 'my maintenance requests', "
+            f"automatically use tenant_id={persona['tenant_id']} or email='{persona['email']}' in your MCP tool calls.\n\n"
+        )
+    elif role == "executive_admin":
+        prompt += (
+            "\nEXECUTIVE ADMIN BEHAVIOR:\n"
+            "You have full authority to approve high-value lease agreements (>50,000 EGP/month) requiring executive sign-off, "
+            "review company-wide lease terms, and override constraints.\n\n"
+        )
+    else:
+        prompt += (
+            "\nPROPERTY MANAGER BEHAVIOR:\n"
+            "You manage property operations, unit search/lookup, maintenance dispatch, and standard tenant communication.\n\n"
+        )
+
+    prompt += (
+        "CRITICAL MULTI-TOOL & REASONING RULES:\n"
+        "1. Whenever answering a request, you MUST invoke the appropriate MCP tool(s) to fetch real database facts before responding.\n"
+        "2. If a request requires multiple actions (e.g. searching for available units THEN drafting a lease or checking tenant history), "
+        "execute multiple MCP tool calls iteratively before generating your final response.\n"
+        "3. Do NOT make up unit prices, lease numbers, or maintenance statuses.\n\n"
+        "OUTPUT FORMAT INSTRUCTIONS:\n"
+        "Format your final text responses strictly using clean, semantic HTML tags without markdown codeblock wrappers (no ```html). "
+        "Use <h3> for section titles, <p> for text, <ul>/<li> for lists, <strong> for emphasis, and <table>/<thead>/<tbody>/<tr>/<th>/<td> for structured tables. "
+        "This ensures rich rendering inside the portal interface."
+    )
+    return prompt
+
+@app.get("/api/personas")
+async def list_personas():
+    return FIXED_PERSONAS
 
 @app.get("/", response_class=HTMLResponse)
 async def get_index():

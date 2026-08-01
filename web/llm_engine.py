@@ -24,7 +24,7 @@ AVAILABLE_MODELS = [
 class MCPLLMEngine:
     """Provider-agnostic AI engine using LiteLLM to bridge free LLMs with any MCP server toolset."""
 
-    def __init__(self, default_model: str = "gemini/gemini-2.5-flash"):
+    def __init__(self, default_model: str = "gemini/gemini-3.1-flash-lite"):
         self.default_model = default_model
 
     async def execute_agent_loop(

@@ -26,7 +26,7 @@ function initModelDropdown() {
     const opt = document.createElement('option');
     opt.value = m;
     opt.innerText = m;
-    if (m === 'gemini/gemini-2.5-flash') opt.selected = true;
+    if (m === 'gemini/gemini-3.1-flash-lite') opt.selected = true;
     select.appendChild(opt);
   });
 }
@@ -371,10 +371,39 @@ async function respondElicitation(leaseId, proposedRent, approved) {
   }
 }
 
+let currentPersonas = {};
+
+async function fetchPersonas() {
+  try {
+    const res = await fetch('/api/personas');
+    currentPersonas = await res.json();
+    updatePersonaBanner();
+  } catch (err) {
+    console.error("Failed to fetch personas:", err);
+  }
+}
+
+function updatePersonaBanner() {
+  const role = document.getElementById('roleSelect')?.value || 'property_manager';
+  const persona = currentPersonas[role];
+  const infoEl = document.getElementById('personaInfo');
+  const badgeEl = document.getElementById('personaRoleBadge');
+  
+  if (persona && infoEl && badgeEl) {
+    let detailStr = `👤 <strong>Active Persona:</strong> ${persona.name} (<code>${persona.email}</code>)`;
+    if (persona.unit_number) {
+      detailStr += ` | <strong>Unit:</strong> ${persona.unit_number}`;
+    }
+    infoEl.innerHTML = detailStr;
+    badgeEl.innerText = persona.role.toUpperCase().replace('_', ' ');
+  }
+}
+
 function onRoleChange() {
   const role = document.getElementById('roleSelect').value;
+  updatePersonaBanner();
   document.getElementById('notifStatus').innerText = 'PUSH SENT (' + role.toUpperCase() + ')';
-  renderMessageDOM('assistant', `<h3>ℹ️ تم تغيير صلاحيات المستخدم</h3><p>الدور الجديد: <strong>${role}</strong>. تم إرسال إشعار <code>notifications/tools/list_changed</code>.</p>`);
+  renderMessageDOM('assistant', `<h3>ℹ️ تم تغيير شخصية وصلاحيات المستخدم</h3><p>الدور والشخصية الحالية: <strong>${role}</strong>. تم تحديث سياق النموذج (LLM Context) وإرسال إشعار <code>notifications/tools/list_changed</code>.</p>`);
 }
 
 function handleKeyDown(e) {
@@ -386,5 +415,6 @@ function handleKeyDown(e) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initModelDropdown();
+  fetchPersonas();
   fetchChatSessions();
 });
