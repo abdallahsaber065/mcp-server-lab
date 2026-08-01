@@ -399,11 +399,54 @@ function updatePersonaBanner() {
   }
 }
 
+async function fetchRagDocs() {
+  const container = document.getElementById('ragDocsList');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/rag/documents');
+    const data = await res.json();
+    if (data.documents && data.documents.length > 0) {
+      container.innerHTML = data.documents.map(d => 
+        `<div style="margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px;">
+           <span style="color:#a78bfa; font-weight:600;">[${(d.metadata.category || 'policy').toUpperCase()}]</span> ${d.payload.substring(0, 85)}...
+         </div>`
+      ).join('');
+    } else {
+      container.innerHTML = '<i>No documents indexed.</i>';
+    }
+  } catch (err) {
+    container.innerHTML = '<span style="color:#ef4444;">Failed to load RAG docs</span>';
+  }
+}
+
+async function fetchTenantMemories() {
+  const container = document.getElementById('memoryList');
+  if (!container) return;
+  const role = document.getElementById('roleSelect')?.value || 'tenant';
+  const persona = currentPersonas[role] || { tenant_id: 1, name: 'Amr Hassan' };
+  try {
+    const res = await fetch(`/api/memory/${persona.tenant_id}`);
+    const data = await res.json();
+    if (data.memories && data.memories.length > 0) {
+      container.innerHTML = data.memories.map(m => 
+        `<div style="margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px;">
+           <span style="color:#34d399; font-weight:600;">[${(m.category || 'gen').toUpperCase()}]</span> ${m.event_summary}
+         </div>`
+      ).join('');
+    } else {
+      container.innerHTML = `<i>No past memories for ${persona.name || 'this user'}.</i>`;
+    }
+  } catch (err) {
+    container.innerHTML = '<span style="color:#ef4444;">Failed to load memories</span>';
+  }
+}
+
 function onRoleChange() {
   const role = document.getElementById('roleSelect').value;
   updatePersonaBanner();
+  fetchTenantMemories();
   document.getElementById('notifStatus').innerText = 'PUSH SENT (' + role.toUpperCase() + ')';
-  renderMessageDOM('assistant', `<h3>ℹ️ تم تغيير شخصية وصلاحيات المستخدم</h3><p>الدور والشخصية الحالية: <strong>${role}</strong>. تم تحديث سياق النموذج (LLM Context) وإرسال إشعار <code>notifications/tools/list_changed</code>.</p>`);
+  renderMessageDOM('assistant', `<h3>ℹ️ تم تغيير شخصية وصلاحيات المستخدم</h3><p>الدور والشخصية الحالية: <strong>${role}</strong>. تم تحديث سياق النموذج (LLM Context)، استدعاء الذاكرة، وإرسال إشعار <code>notifications/tools/list_changed</code>.</p>`);
 }
 
 function handleKeyDown(e) {
@@ -415,6 +458,9 @@ function handleKeyDown(e) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initModelDropdown();
-  fetchPersonas();
+  fetchPersonas().then(() => {
+    fetchTenantMemories();
+  });
+  fetchRagDocs();
   fetchChatSessions();
 });

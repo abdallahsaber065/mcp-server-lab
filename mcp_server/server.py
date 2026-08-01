@@ -16,6 +16,8 @@ from mcp_server.schemas import (
     QueryUnitsArgs, LookupLeaseArgs, MaintenanceRequestArgs,
     ModifyLeaseArgs, BatchAuditArgs
 )
+from mcp_server.rag import SearchKnowledgeBaseInput, search_knowledge_base_handler
+from mcp_server.memory import RecordMemoryInput, RecallMemoryInput, record_tenant_memory_handler, recall_tenant_memories_handler
 
 class CornerstoneMCPServer:
     """Cornerstone Realty Group MCP Server implementing protocol concerns."""
@@ -64,6 +66,16 @@ class CornerstoneMCPServer:
                 "name": "submit_maintenance_request",
                 "description": "File a maintenance or repair ticket for a property unit.",
                 "inputSchema": MaintenanceRequestArgs.model_json_schema()
+            },
+            {
+                "name": "search_knowledge_base",
+                "description": "Search unstructured domain policies, lease termination rules, quiet hours, and emergency procedures (RAG Tool - Option A).",
+                "inputSchema": SearchKnowledgeBaseInput.model_json_schema()
+            },
+            {
+                "name": "recall_tenant_memories",
+                "description": "Recall past episodic memories, preferences, and operational notes for a specific tenant (Memory Tool - Option B).",
+                "inputSchema": RecallMemoryInput.model_json_schema()
             }
         ]
         
@@ -78,6 +90,11 @@ class CornerstoneMCPServer:
                 "name": "run_property_audit",
                 "description": "Run a comprehensive compliance audit report for a property. Reports live progress updates.",
                 "inputSchema": BatchAuditArgs.model_json_schema()
+            })
+            tools.append({
+                "name": "record_tenant_memory",
+                "description": "Record a new episodic memory, tenant preference, or medical/maintenance constraint (Memory Tool - Option B).",
+                "inputSchema": RecordMemoryInput.model_json_schema()
             })
             
         return tools
@@ -217,6 +234,21 @@ class CornerstoneMCPServer:
                     "occupancy_rate": f"{(occupied_u / total_u * 100):.1f}%" if total_u > 0 else "0%",
                     "progress_logs": progress_history
                 }
+
+            elif name == "search_knowledge_base":
+                # Option A: RAG Knowledge Base Search
+                active_role = getattr(self, "current_user_role", "property_manager")
+                return search_knowledge_base_handler(arguments, session_role=active_role)
+
+            elif name == "record_tenant_memory":
+                # Option B: Record Episodic Memory
+                active_role = getattr(self, "current_user_role", "property_manager")
+                return record_tenant_memory_handler(arguments, session_role=active_role)
+
+            elif name == "recall_tenant_memories":
+                # Option B: Recall Episodic Memories
+                active_role = getattr(self, "current_user_role", "property_manager")
+                return recall_tenant_memories_handler(arguments, session_role=active_role)
 
             else:
                 return {"status": "error", "error_type": "UnknownTool", "message": f"Tool '{name}' is not recognized."}
