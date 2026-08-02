@@ -1,11 +1,11 @@
-Cornerstone Realty Group MCP â€” End-to-End Execution Transcript
+Cornerstone Realty Group MCP  End-to-End Execution Transcript
 Generated : 2026-07-31T14:54:22.777234+00:00
 Author    : Ahmed Wael (ahmedeladawy16)
-Phase     : 3 â€” Client Agent & Notifications
+Phase     : 3  Client Agent & Notifications
 ======================================================================
 
 ======================================================================
-  Cornerstone Realty Group â€” MCP Client Agent (Phase 3)
+  Cornerstone Realty Group  MCP Client Agent (Phase 3)
 ======================================================================
 [2026-07-31T14:54:22Z] [CLIENT_INFO]
 {
@@ -16,7 +16,7 @@ Phase     : 3 â€” Client Agent & Notifications
 }
 
 ======================================================================
-  STEP 1 â€” Protocol Handshake & Capability Negotiation
+  STEP 1  Protocol Handshake & Capability Negotiation
 ======================================================================
 [2026-07-31T14:54:22Z] [CLIENT -> initialize request]
 {
@@ -64,10 +64,10 @@ Phase     : 3 â€” Client Agent & Notifications
   "protocolVersion": "2025-06-18"
 }
 [2026-07-31T14:54:22Z] [HANDSHAKE]
-âœ“ Capability negotiation passed â€” elicitation, listChanged, progress all supported.
+Capability negotiation passed  elicitation, listChanged, progress all supported.
 
 ======================================================================
-  STEP 2 â€” Dynamic Tool Discovery (tools/list)
+  STEP 2  Dynamic Tool Discovery (tools/list)
 ======================================================================
 [2026-07-31T14:54:22Z] [CLIENT -> tools/list request]
 {
@@ -102,10 +102,10 @@ Phase     : 3 â€” Client Agent & Notifications
   ]
 }
 [2026-07-31T14:54:22Z] [DISCOVERY]
-âœ“ Discovered 5 tools: ['lookup_available_units', 'get_tenant_lease', 'submit_maintenance_request', 'modify_lease_terms', 'run_property_audit']
+Discovered 5 tools: ['lookup_available_units', 'get_tenant_lease', 'submit_maintenance_request', 'modify_lease_terms', 'run_property_audit']
 
 ======================================================================
-  STEP 3 â€” Static Resource Read (realty://policies/lease_terms)
+  STEP 3  Static Resource Read (realty://policies/lease_terms)
 ======================================================================
 [2026-07-31T14:54:22Z] [CLIENT -> resources/read request]
 {
@@ -127,10 +127,10 @@ Phase     : 3 â€” Client Agent & Notifications
   ]
 }
 [2026-07-31T14:54:22Z] [POLICY]
-âœ“ Max manager discount = 15.0% | Exec approval above EGP 40,000
+Max manager discount = 15.0% | Exec approval above EGP 40,000
 
 ======================================================================
-  STEP 4 â€” Tool Call: submit_maintenance_request
+  STEP 4  Tool Call: submit_maintenance_request
 ======================================================================
 [2026-07-31T14:54:22Z] [CLIENT -> tools/call request]
 {
@@ -160,12 +160,12 @@ Phase     : 3 â€” Client Agent & Notifications
   }
 }
 [2026-07-31T14:54:22Z] [MAINTENANCE]
-âœ“ Ticket #3 filed â€” priority=urgent
+Ticket #3 filed  priority=urgent
 
 ======================================================================
-  STEP 5 â€” Tool Call: modify_lease_terms (Elicitation Mid-Call Pause)
+  STEP 5  Tool Call: modify_lease_terms (Elicitation Mid-Call Pause)
 ======================================================================
-[2026-07-31T14:54:22Z] [CLIENT -> tools/call request (attempt 1 â€” no approval)]
+[2026-07-31T14:54:22Z] [CLIENT -> tools/call request (attempt 1  no approval)]
 {
   "jsonrpc": "2.0",
   "method": "tools/call",
@@ -210,7 +210,7 @@ Phase     : 3 â€” Client Agent & Notifications
     "comment": "One-time discount authorised for long-standing tenant."
   }
 }
-[2026-07-31T14:54:22Z] [CLIENT -> tools/call request (attempt 2 â€” with approval)]
+[2026-07-31T14:54:22Z] [CLIENT -> tools/call request (attempt 2  with approval)]
 {
   "jsonrpc": "2.0",
   "method": "tools/call",
@@ -239,12 +239,12 @@ Phase     : 3 â€” Client Agent & Notifications
   }
 }
 [2026-07-31T14:54:22Z] [ELICITATION]
-âœ“ Lease #1 updated: EGP 12,000 -> EGP 9,000
+Lease #1 updated: EGP 12,000 -> EGP 9,000
 
 ======================================================================
-  STEP 6 â€” Role Switch -> notifications/tools/list_changed Push Notification
+  STEP 6  Role Switch -> notifications/tools/list_changed Push Notification
 ======================================================================
-[2026-07-31T14:54:22Z] [SERVER â€” role switch triggered]
+[2026-07-31T14:54:22Z] [SERVER  role switch triggered]
 {
   "notification": "notifications/tools/list_changed",
   "previous_role": "property_manager",
@@ -270,7 +270,7 @@ Phase     : 3 â€” Client Agent & Notifications
     "timestamp": "2026-07-31T14:54:22.771193+00:00"
   }
 }
-[2026-07-31T14:54:22Z] [NOTIFICATION RECEIVED â€” notifications/tools/list_changed]
+[2026-07-31T14:54:22Z] [NOTIFICATION RECEIVED  notifications/tools/list_changed]
 {
   "previous_role": "property_manager",
   "new_role": "tenant",
@@ -282,10 +282,10 @@ Phase     : 3 â€” Client Agent & Notifications
   "timestamp": "2026-07-31T14:54:22.771193+00:00"
 }
 [2026-07-31T14:54:22Z] [NOTIFICATIONS]
-âœ“ Notification delivered to 1 handler(s). Client tool registry refreshed: ['lookup_available_units', 'get_tenant_lease', 'submit_maintenance_request']
+Notification delivered to 1 handler(s). Client tool registry refreshed: ['lookup_available_units', 'get_tenant_lease', 'submit_maintenance_request']
 
 ======================================================================
-  STEP 7 â€” Tool Call: run_property_audit (progressToken Reporting)
+  STEP 7  Tool Call: run_property_audit (progressToken Reporting)
 ======================================================================
 [2026-07-31T14:54:22Z] [CLIENT -> tools/call request (with progressToken)]
 {
@@ -404,7 +404,7 @@ Phase     : 3 â€” Client Agent & Notifications
   ]
 }
 [2026-07-31T14:54:22Z] [PROGRESS]
-âœ“ Audit complete â€” 3 units, 33.3% occupancy. Progress token: audit-df9fa8f9
+Audit complete  3 units, 33.3% occupancy. Progress token: audit-df9fa8f9
 
 ======================================================================
   ALL STEPS COMPLETE

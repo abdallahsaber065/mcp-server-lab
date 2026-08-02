@@ -1,6 +1,7 @@
 """Option B: Agent Episodic Memory Package."""
 from mcp_server.memory.store import (
-    memory_store, seed_cornerstone_memories, decide_memory_fate, MemoryRoutingDecision
+    memory_store, seed_cornerstone_memories, decide_memory_fate, MemoryRoutingDecision,
+    maybe_remember, load_memory_context
 )
 from mcp_server.memory.tools import (
     RecordMemoryInput, RecallMemoryInput,
@@ -12,6 +13,8 @@ __all__ = [
     "seed_cornerstone_memories",
     "decide_memory_fate",
     "MemoryRoutingDecision",
+    "maybe_remember",
+    "load_memory_context",
     "RecordMemoryInput",
     "RecallMemoryInput",
     "record_tenant_memory_handler",

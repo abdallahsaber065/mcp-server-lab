@@ -1,7 +1,7 @@
 """
 agent/client.py
 ----------------
-Cornerstone Realty Group â€” MCP Client Agent  (Phase 3 / Ahmed Wael)
+Cornerstone Realty Group  MCP Client Agent  (Phase 3 / Ahmed Wael)
 
 Demonstrates the full MCP client lifecycle:
   1. Protocol handshake & capability negotiation
@@ -9,7 +9,7 @@ Demonstrates the full MCP client lifecycle:
   3. Static resource read    (realty://policies/lease_terms)
   4. submit_maintenance_request tool call
   5. modify_lease_terms with elicitation mid-call pause + resumption
-  6. notifications/tools/list_changed push listener (role switch â†’ tenant)
+  6. notifications/tools/list_changed push listener (role switch  tenant)
   7. run_property_audit with live progressToken reporting
   8. Execution transcript written to  agent/demo_transcript.txt
 """
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 # ---------------------------------------------------------------------------
-# Path bootstrap â€“ allows running from any working directory
+# Path bootstrap  allows running from any working directory
 # ---------------------------------------------------------------------------
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -71,10 +71,10 @@ class TranscriptLogger:
         os.makedirs(os.path.dirname(TRANSCRIPT_PATH), exist_ok=True)
         with open(TRANSCRIPT_PATH, "w", encoding="utf-8") as fh:
             header = (
-                "Cornerstone Realty Group MCP â€” End-to-End Execution Transcript\n"
+                "Cornerstone Realty Group MCP  End-to-End Execution Transcript\n"
                 f"Generated : {datetime.now(timezone.utc).isoformat()}\n"
                 f"Author    : Ahmed Wael (ahmedeladawy16)\n"
-                f"Phase     : 3 â€” Client Agent & Notifications\n"
+                f"Phase     : 3  Client Agent & Notifications\n"
                 + ("=" * 70)
             )
             fh.write(header + "\n")
@@ -121,7 +121,7 @@ class CornerstoneClientAgent:
         params = notification.get("params", {})
         self._notification_log.append(notification)
         self.transcript.log(
-            "NOTIFICATION RECEIVED â€” notifications/tools/list_changed",
+            "NOTIFICATION RECEIVED  notifications/tools/list_changed",
             {
                 "previous_role": params.get("previousRole"),
                 "new_role": params.get("newRole"),
@@ -133,11 +133,11 @@ class CornerstoneClientAgent:
         self._known_tools = params.get("availableTools", [])
 
     # ------------------------------------------------------------------
-    # Step 1 â€” Protocol handshake & capability negotiation
+    # Step 1  Protocol handshake & capability negotiation
     # ------------------------------------------------------------------
 
     def _step_handshake(self) -> None:
-        self.transcript.section("STEP 1 â€” Protocol Handshake & Capability Negotiation")
+        self.transcript.section("STEP 1  Protocol Handshake & Capability Negotiation")
 
         init_db()
         self._server = CornerstoneMCPServer()
@@ -170,15 +170,15 @@ class CornerstoneClientAgent:
 
         self.transcript.log(
             "HANDSHAKE",
-            "âœ“ Capability negotiation passed â€” elicitation, listChanged, progress all supported.",
+            "Capability negotiation passed  elicitation, listChanged, progress all supported.",
         )
 
     # ------------------------------------------------------------------
-    # Step 2 â€” Dynamic tool discovery
+    # Step 2  Dynamic tool discovery
     # ------------------------------------------------------------------
 
     def _step_tool_discovery(self) -> None:
-        self.transcript.section("STEP 2 â€” Dynamic Tool Discovery (tools/list)")
+        self.transcript.section("STEP 2  Dynamic Tool Discovery (tools/list)")
 
         tools_list_request = {
             "jsonrpc": "2.0",
@@ -201,16 +201,16 @@ class CornerstoneClientAgent:
         )
         self.transcript.log(
             "DISCOVERY",
-            f"âœ“ Discovered {len(tools)} tools: {self._known_tools}",
+            f"Discovered {len(tools)} tools: {self._known_tools}",
         )
 
     # ------------------------------------------------------------------
-    # Step 3 â€” Static resource read
+    # Step 3  Static resource read
     # ------------------------------------------------------------------
 
     def _step_resource_read(self) -> None:
         self.transcript.section(
-            "STEP 3 â€” Static Resource Read (realty://policies/lease_terms)"
+            "STEP 3  Static Resource Read (realty://policies/lease_terms)"
         )
 
         resource_request = {
@@ -229,16 +229,16 @@ class CornerstoneClientAgent:
         policy = json.loads(policy_text)
         self.transcript.log(
             "POLICY",
-            f"âœ“ Max manager discount = {policy['max_manager_discount_percent']}% | "
+            f"Max manager discount = {policy['max_manager_discount_percent']}% | "
             f"Exec approval above EGP {policy['executive_approval_required_above_rent']:,.0f}",
         )
 
     # ------------------------------------------------------------------
-    # Step 4 â€” submit_maintenance_request
+    # Step 4  submit_maintenance_request
     # ------------------------------------------------------------------
 
     def _step_maintenance_request(self) -> None:
-        self.transcript.section("STEP 4 â€” Tool Call: submit_maintenance_request")
+        self.transcript.section("STEP 4  Tool Call: submit_maintenance_request")
 
         tool_call_request = {
             "jsonrpc": "2.0",
@@ -264,19 +264,19 @@ class CornerstoneClientAgent:
         assert result["status"] == "success", "Maintenance request should succeed"
         self.transcript.log(
             "MAINTENANCE",
-            f"âœ“ Ticket #{result['result']['request_id']} filed â€” priority=urgent",
+            f"Ticket #{result['result']['request_id']} filed  priority=urgent",
         )
 
     # ------------------------------------------------------------------
-    # Step 5 â€” modify_lease_terms with elicitation
+    # Step 5  modify_lease_terms with elicitation
     # ------------------------------------------------------------------
 
     def _step_modify_lease_with_elicitation(self) -> None:
         self.transcript.section(
-            "STEP 5 â€” Tool Call: modify_lease_terms (Elicitation Mid-Call Pause)"
+            "STEP 5  Tool Call: modify_lease_terms (Elicitation Mid-Call Pause)"
         )
 
-        # First attempt â€” 25% discount > 15% threshold â†’ elicitation_required
+        # First attempt  25% discount > 15% threshold  elicitation_required
         call_args = {
             "lease_id": 1,
             "new_monthly_rent": 9000.0,  # 25% discount on base EGP 12,000
@@ -290,7 +290,7 @@ class CornerstoneClientAgent:
             "params": {"name": "modify_lease_terms", "arguments": call_args},
         }
         self.transcript.log(
-            "CLIENT -> tools/call request (attempt 1 â€” no approval)",
+            "CLIENT -> tools/call request (attempt 1  no approval)",
             first_request,
         )
 
@@ -337,7 +337,7 @@ class CornerstoneClientAgent:
             "params": {"name": "modify_lease_terms", "arguments": resume_args},
         }
         self.transcript.log(
-            "CLIENT -> tools/call request (attempt 2 â€” with approval)", resume_request
+            "CLIENT -> tools/call request (attempt 2  with approval)", resume_request
         )
 
         result_2 = self._server.call_tool("modify_lease_terms", resume_args)
@@ -345,24 +345,24 @@ class CornerstoneClientAgent:
         assert result_2["status"] == "success", "Lease update should succeed after approval"
         self.transcript.log(
             "ELICITATION",
-            f"âœ“ Lease #{result_2['result']['lease_id']} updated: "
+            f"Lease #{result_2['result']['lease_id']} updated: "
             f"EGP {result_2['result']['previous_rent']:,.0f} -> "
             f"EGP {result_2['result']['updated_rent']:,.0f}",
         )
 
     # ------------------------------------------------------------------
-    # Step 6 â€” Role switch â†’ notifications/tools/list_changed
+    # Step 6  Role switch  notifications/tools/list_changed
     # ------------------------------------------------------------------
 
     def _step_role_switch_notification(self) -> None:
         self.transcript.section(
-            "STEP 6 â€” Role Switch -> notifications/tools/list_changed Push Notification"
+            "STEP 6  Role Switch -> notifications/tools/list_changed Push Notification"
         )
 
-        # Server switches role from property_manager â†’ tenant
+        # Server switches role from property_manager  tenant
         notification_payload = self._server.set_user_role_and_notify("tenant")
         self.transcript.log(
-            "SERVER â€” role switch triggered", notification_payload
+            "SERVER  role switch triggered", notification_payload
         )
 
         # Build MCP notification envelope & emit it
@@ -380,7 +380,7 @@ class CornerstoneClientAgent:
         handled = self._dispatcher.dispatch(mcp_notification)
         self.transcript.log(
             "NOTIFICATIONS",
-            f"âœ“ Notification delivered to {handled} handler(s). "
+            f"Notification delivered to {handled} handler(s). "
             f"Client tool registry refreshed: {self._known_tools}",
         )
 
@@ -392,12 +392,12 @@ class CornerstoneClientAgent:
         )
 
     # ------------------------------------------------------------------
-    # Step 7 â€” run_property_audit with progressToken
+    # Step 7  run_property_audit with progressToken
     # ------------------------------------------------------------------
 
     def _step_property_audit_with_progress(self) -> None:
         self.transcript.section(
-            "STEP 7 â€” Tool Call: run_property_audit (progressToken Reporting)"
+            "STEP 7  Tool Call: run_property_audit (progressToken Reporting)"
         )
 
         # Switch back to manager role to regain audit access
@@ -450,7 +450,7 @@ class CornerstoneClientAgent:
 
         self.transcript.log(
             "PROGRESS",
-            f"âœ“ Audit complete â€” {audit_result['total_units']} units, "
+            f"Audit complete  {audit_result['total_units']} units, "
             f"{audit_result['occupancy_rate']} occupancy. "
             f"Progress token: {progress_token}",
         )
@@ -462,7 +462,7 @@ class CornerstoneClientAgent:
     def run(self) -> None:
         """Execute the full MCP client lifecycle and save the transcript."""
         self.transcript.section(
-            "Cornerstone Realty Group â€” MCP Client Agent (Phase 3)"
+            "Cornerstone Realty Group  MCP Client Agent (Phase 3)"
         )
         self.transcript.log(
             "CLIENT_INFO",
