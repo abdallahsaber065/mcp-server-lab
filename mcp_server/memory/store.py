@@ -37,6 +37,51 @@ def decide_memory_fate(turn_text: str) -> MemoryRoutingDecision:
         destination="forget"
     )
 
+def maybe_remember(turn_text: str, entity_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Write path: turn -> routing decision -> episodic store.
+    Direct function from option_b_memory_example.py.
+    """
+    decision = decide_memory_fate(turn_text)
+
+    if decision.destination == "forget":
+        return None
+
+    try:
+        t_id = int(str(entity_id).replace("tenant_", "").replace("pet_", ""))
+    except ValueError:
+        t_id = 1
+
+    return memory_store.record_memory(
+        tenant_id=t_id,
+        event_summary=decision.event_summary or turn_text,
+        context=decision.context,
+        outcome=decision.outcome,
+        category=decision.category
+    )
+
+def load_memory_context(entity_id: str, opening_message: str, top_k: int = 3) -> str:
+    """
+    Read path: session start -> load relevant memories -> formatted text string.
+    Direct function from option_b_memory_example.py.
+    """
+    try:
+        t_id = int(str(entity_id).replace("tenant_", "").replace("pet_", ""))
+    except ValueError:
+        t_id = 1
+
+    matches = memory_store.recall_memories(
+        tenant_id=t_id,
+        query=opening_message,
+        top_k=top_k
+    )
+
+    if not matches:
+        return "No prior history found for this entity and topic."
+
+    lines = [f"- {m['event_summary']}" for m in matches]
+    return "Relevant past notes:\n" + "\n".join(lines)
+
 class EpisodicMemoryStore:
     """Stores and retrieves tenant-scoped episodic memories using BM25 and entity isolation."""
 

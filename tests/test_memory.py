@@ -82,3 +82,21 @@ def test_memory_schema_extra_forbid():
             "event_summary": "test",
             "malicious_extra_prop": "error"
         })
+
+def test_maybe_remember_and_load_memory_context():
+    """Verify exact functions from option_b_memory_example.py work as expected."""
+    from mcp_server.memory import maybe_remember, load_memory_context
+
+    # 1. Transient turn -> forget
+    forget_res = maybe_remember("The weather is nice today.", "tenant_42")
+    assert forget_res is None
+
+    # 2. Preference turn -> episodic
+    store_res = maybe_remember("Tenant prefers morning appointments and has a severe penicillin allergy.", "tenant_42")
+    assert store_res is not None
+    assert store_res["tenant_id"] == 42
+
+    # 3. Load memory context string
+    context_str = load_memory_context("tenant_42", "penicillin allergy concerns")
+    assert "Relevant past notes:" in context_str
+    assert "penicillin allergy" in context_str
