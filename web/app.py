@@ -17,8 +17,8 @@ logger = logging.getLogger("mcp_web_app")
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from mcp_server.server import CornerstoneMCPServer
-from mcp_server.rag import knowledge_store
-from mcp_server.memory import memory_store, RecordMemoryInput
+# from mcp_server.rag import knowledge_store  # Week 3: removed — needs update to use top-level rag/
+# from mcp_server.memory import memory_store, RecordMemoryInput  # Week 3: removed — needs update to use top-level memory/
 from mcp_server.db_helpers import (
     create_chat_session, get_all_chat_sessions, get_chat_messages,
     save_chat_message, delete_chat_session
@@ -132,14 +132,14 @@ def build_system_prompt(role: str) -> str:
             "You manage property operations, unit search/lookup, maintenance dispatch, and standard tenant communication.\n\n"
         )
 
-    # Option B: Episodic Memory Auto-Recall Injection for Session Start
-    tenant_id = persona.get("tenant_id", 1)
-    recalled_mems = memory_store.recall_memories(tenant_id=tenant_id, query="", top_k=3)
-    if recalled_mems:
-        prompt += "RECALLED EPISODIC MEMORIES FOR THIS TENANT (Option B Memory):\n"
-        for m in recalled_mems:
-            prompt += f"- [{m['category'].upper()}] {m['event_summary']} (Recorded: {m['timestamp'][:10]})\n"
-        prompt += "\n"
+    # Week 3: Episodic memory recall disabled — mcp_server/memory removed, needs update to top-level memory/
+    # tenant_id = persona.get("tenant_id", 1)
+    # recalled_mems = memory_store.recall_memories(tenant_id=tenant_id, query="", top_k=3)
+    # if recalled_mems:
+    #     prompt += "RECALLED EPISODIC MEMORIES FOR THIS TENANT (Option B Memory):\n"
+    #     for m in recalled_mems:
+    #         prompt += f"- [{m['category'].upper()}] {m['event_summary']} (Recorded: {m['timestamp'][:10]})\n"
+    #     prompt += "\n"
 
     prompt += (
         "CRITICAL MULTI-TOOL & REASONING RULES:\n"
@@ -159,46 +159,22 @@ def build_system_prompt(role: str) -> str:
 @app.get("/api/personas")
 async def list_personas():
     return FIXED_PERSONAS
-
 @app.get("/api/rag/documents")
 async def list_rag_documents():
-    """Endpoint for UI RAG Knowledge Base Visualizer (Option A)."""
-    return {
-        "status": "success",
-        "total_documents": len(knowledge_store.documents),
-        "documents": [
-            {
-                "id": doc["id"],
-                "payload": doc["payload"],
-                "metadata": doc["metadata"]
-            }
-            for doc in knowledge_store.documents
-        ]
-    }
+    """Week 3: Disabled — mcp_server/rag removed, needs update to use top-level rag/ package."""
+    return {"status": "disabled", "message": "RAG endpoint needs migration to top-level rag/ package (Week 3)."}
+
 
 @app.get("/api/memory/{tenant_id}")
 async def get_tenant_memories_endpoint(tenant_id: int):
-    """Endpoint for UI Agent Memory Visualizer (Option B)."""
-    mems = memory_store.recall_memories(tenant_id=tenant_id, query="", top_k=10)
-    return {
-        "status": "success",
-        "tenant_id": tenant_id,
-        "count": len(mems),
-        "memories": mems
-    }
+    """Week 3: Disabled — mcp_server/memory removed, needs update to use top-level memory/ package."""
+    return {"status": "disabled", "message": "Memory endpoint needs migration to top-level memory/ package (Week 3).", "tenant_id": tenant_id}
+
 
 @app.post("/api/memory/record")
-async def record_memory_endpoint(req: RecordMemoryInput):
-    """Endpoint to record a new episodic memory directly from UI (Option B)."""
-    rec = memory_store.record_memory(
-        tenant_id=req.tenant_id,
-        event_summary=req.event_summary,
-        context=req.context,
-        outcome=req.outcome,
-        category=req.category
-    )
-    return {"status": "success", "memory_record": rec}
-
+async def record_memory_endpoint(req: dict):
+    """Week 3: Disabled — mcp_server/memory removed, needs update to use top-level memory/ package."""
+    return {"status": "disabled", "message": "Memory recording needs migration to top-level memory/ package (Week 3)."}
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     index_path = os.path.join(static_dir, "index.html")
