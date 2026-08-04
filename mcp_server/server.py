@@ -16,8 +16,8 @@ from mcp_server.schemas import (
     QueryUnitsArgs, LookupLeaseArgs, MaintenanceRequestArgs,
     ModifyLeaseArgs, BatchAuditArgs
 )
-from mcp_server.rag import SearchKnowledgeBaseInput, search_knowledge_base_handler
-from mcp_server.memory import RecordMemoryInput, RecallMemoryInput, record_tenant_memory_handler, recall_tenant_memories_handler
+# Week 3: rag/ and memory/ moved to top-level packages (rag/, memory/)
+# Old mcp_server/rag and mcp_server/memory removed — see Week 3 instruction files
 
 class CornerstoneMCPServer:
     """Cornerstone Realty Group MCP Server implementing protocol concerns."""
@@ -67,16 +67,7 @@ class CornerstoneMCPServer:
                 "description": "File a maintenance or repair ticket for a property unit.",
                 "inputSchema": MaintenanceRequestArgs.model_json_schema()
             },
-            {
-                "name": "search_knowledge_base",
-                "description": "Search unstructured domain policies, lease termination rules, quiet hours, and emergency procedures (RAG Tool - Option A).",
-                "inputSchema": SearchKnowledgeBaseInput.model_json_schema()
-            },
-            {
-                "name": "recall_tenant_memories",
-                "description": "Recall past episodic memories, preferences, and operational notes for a specific tenant (Memory Tool - Option B).",
-                "inputSchema": RecallMemoryInput.model_json_schema()
-            }
+            # Week 3: search_knowledge_base and recall_tenant_memories moved to top-level rag/ and memory/
         ]
         
         # Role-gated write tools (Demonstrates Notifications & defensive auth)
@@ -91,11 +82,7 @@ class CornerstoneMCPServer:
                 "description": "Run a comprehensive compliance audit report for a property. Reports live progress updates.",
                 "inputSchema": BatchAuditArgs.model_json_schema()
             })
-            tools.append({
-                "name": "record_tenant_memory",
-                "description": "Record a new episodic memory, tenant preference, or medical/maintenance constraint (Memory Tool - Option B).",
-                "inputSchema": RecordMemoryInput.model_json_schema()
-            })
+            # Week 3: record_tenant_memory moved to top-level memory/
             
         return tools
 
@@ -235,20 +222,8 @@ class CornerstoneMCPServer:
                     "progress_logs": progress_history
                 }
 
-            elif name == "search_knowledge_base":
-                # Option A: RAG Knowledge Base Search
-                active_role = getattr(self, "current_user_role", "property_manager")
-                return search_knowledge_base_handler(arguments, session_role=active_role)
-
-            elif name == "record_tenant_memory":
-                # Option B: Record Episodic Memory
-                active_role = getattr(self, "current_user_role", "property_manager")
-                return record_tenant_memory_handler(arguments, session_role=active_role)
-
-            elif name == "recall_tenant_memories":
-                # Option B: Recall Episodic Memories
-                active_role = getattr(self, "current_user_role", "property_manager")
-                return recall_tenant_memories_handler(arguments, session_role=active_role)
+            # Week 3: search_knowledge_base, record_tenant_memory, recall_tenant_memories
+            # moved to top-level rag/ and memory/ packages
 
             else:
                 return {"status": "error", "error_type": "UnknownTool", "message": f"Tool '{name}' is not recognized."}
