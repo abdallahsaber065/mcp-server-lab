@@ -211,10 +211,11 @@ Visible consequence: Unsupported claims are rejected with explicit rationale, tr
 
 ## 🚀 Quickstart
 
-### 1. Run Master Pytest Suite (76 Passed)
+### 1. Run Master Pytest Suite (79 Passed)
 ```powershell
 uv run pytest tests/
 ```
+
 
 ### 2. Run Master Benchmark Suite
 ```powershell
