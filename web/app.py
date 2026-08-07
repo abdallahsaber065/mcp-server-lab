@@ -22,10 +22,15 @@ from rag.naive_rag import naive_rag_search
 from rag.hybrid_rag import HybridSearchEngine
 from rag.agentic_rag import AgenticRAGRouter
 from rag.graph_rag import PropertyPolicyKnowledgeGraph
+from memory.episodic_store import EpisodicStore
+from memory.stm import ShortTermMemory
+from memory.router import MemoryRouter
+from memory.consolidation import SemanticMemoryStore, SemanticConsolidationEngine
 from mcp_server.db_helpers import (
     create_chat_session, get_all_chat_sessions, get_chat_messages,
     save_chat_message, delete_chat_session, get_db_connection
 )
+
 
 from web.llm_engine import MCPLLMEngine, AVAILABLE_MODELS
 
@@ -56,9 +61,35 @@ hybrid_engine = HybridSearchEngine(rag_store)
 agentic_router = AgenticRAGRouter(hybrid_engine)
 graph_rag = PropertyPolicyKnowledgeGraph()
 
+# Memory Subsystem Stores (Week 3)
+episodic_store = EpisodicStore()
+semantic_store = SemanticMemoryStore()
+consolidation_engine = SemanticConsolidationEngine(episodic_store, semantic_store)
+memory_router = MemoryRouter(episodic_store)
+
+def seed_initial_memories():
+    """Seed initial episodic & consolidated semantic memories for personas."""
+    # Tenant 1 (Amr Hassan) - Paint Allergy
+    episodic_store.insert_episode(
+        entity_id="tenant_1",
+        event_summary="Tenant reported severe asthma/fume allergy triggered by oil-based paints; requested low-VOC non-toxic paint for all unit maintenance.",
+        timestamp="2026-02-15T09:00:00Z"
+    )
+    # Tenant 2 (Fatima Al-Sayed) - Quiet / Top Floor Preference
+    episodic_store.insert_episode(
+        entity_id="tenant_2",
+        event_summary="Tenant requested top-floor unit preference away from street noise for quiet work from home.",
+        timestamp="2026-03-01T11:00:00Z"
+    )
+    # Run initial consolidation to extract semantic facts
+    consolidation_engine.run_periodic_consolidation()
+
+seed_initial_memories()
+
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 FIXED_PERSONAS: Dict[str, Dict[str, Any]] = {
     "tenant": {
@@ -141,14 +172,21 @@ def build_system_prompt(role: str) -> str:
             "You manage property operations, unit search/lookup, maintenance dispatch, and standard tenant communication.\n\n"
         )
 
-    # Week 3: Episodic memory recall disabled — mcp_server/memory removed, needs update to top-level memory/
-    # tenant_id = persona.get("tenant_id", 1)
-    # recalled_mems = memory_store.recall_memories(tenant_id=tenant_id, query="", top_k=3)
-    # if recalled_mems:
-    #     prompt += "RECALLED EPISODIC MEMORIES FOR THIS TENANT (Option B Memory):\n"
-    #     for m in recalled_mems:
-    #         prompt += f"- [{m['category'].upper()}] {m['event_summary']} (Recorded: {m['timestamp'][:10]})\n"
-    #     prompt += "\n"
+    # Week 3: Memory Subsystem Integration (Consolidated Semantic Facts & Recalled Episodes)
+    tenant_id = persona.get("tenant_id", 1)
+    active_facts = semantic_store.get_active_facts(subject=f"tenant_{tenant_id}")
+    if active_facts:
+        prompt += "\nACTIVE CONSOLIDATED TENANT FACTS (Semantic Memory):\n"
+        for f in active_facts:
+            prompt += f"- [{f['fact_key'].upper()}] {f['fact_value']} (v{f['version']})\n"
+        prompt += "\n"
+
+    episodes = episodic_store.query_episodes(entity_id=f"tenant_{tenant_id}", limit=3)
+    if episodes:
+        prompt += "RECENT EPISODIC MEMORIES (Episodic Store):\n"
+        for ep in episodes:
+            prompt += f"- {ep['event_summary']} ({ep['timestamp'][:10]})\n"
+        prompt += "\n"
 
     prompt += (
         "CRITICAL MULTI-TOOL & REASONING RULES:\n"
@@ -168,6 +206,7 @@ def build_system_prompt(role: str) -> str:
 @app.get("/api/personas")
 async def list_personas():
     return FIXED_PERSONAS
+
 @app.get("/api/rag/documents")
 async def list_rag_documents():
     """Week 3: List all ingested policy binder documents with metadata."""
@@ -198,17 +237,52 @@ async def get_benchmarks():
             return json.load(f)
     return {"error": "No benchmark results found."}
 
-
 @app.get("/api/memory/{tenant_id}")
 async def get_tenant_memories_endpoint(tenant_id: int):
-    """Week 3: Disabled — mcp_server/memory removed, needs update to use top-level memory/ package."""
-    return {"status": "disabled", "message": "Memory endpoint needs migration to top-level memory/ package (Week 3).", "tenant_id": tenant_id}
-
+    """Week 3: Retrieve consolidated active semantic facts and episodic history for tenant."""
+    subject = f"tenant_{tenant_id}"
+    active_facts = semantic_store.get_active_facts(subject=subject)
+    episodes = episodic_store.query_episodes(entity_id=subject, limit=5)
+    
+    formatted_memories = []
+    for f in active_facts:
+        formatted_memories.append({
+            "category": f["fact_key"],
+            "event_summary": f"{f['fact_value']} (v{f['version']})",
+            "version": f["version"],
+            "status": f["status"]
+        })
+    for ep in episodes:
+        formatted_memories.append({
+            "category": "episodic",
+            "event_summary": ep["event_summary"],
+            "timestamp": ep["timestamp"]
+        })
+        
+    return {
+        "tenant_id": tenant_id,
+        "facts_count": len(active_facts),
+        "episodes_count": len(episodes),
+        "memories": formatted_memories
+    }
 
 @app.post("/api/memory/record")
 async def record_memory_endpoint(req: dict):
-    """Week 3: Disabled — mcp_server/memory removed, needs update to use top-level memory/ package."""
-    return {"status": "disabled", "message": "Memory recording needs migration to top-level memory/ package (Week 3)."}
+    """Week 3: Route an event via MemoryRouter, persist to EpisodicStore, and trigger semantic consolidation."""
+    tenant_id = req.get("tenant_id", 1)
+    event_text = req.get("event_summary", "")
+    decision = memory_router.route_information(
+        content=event_text,
+        entity_id=f"tenant_{tenant_id}",
+        session_id=req.get("session_id", "web_session")
+    )
+    consolidation_result = consolidation_engine.run_periodic_consolidation(subject=f"tenant_{tenant_id}")
+    return {
+        "status": "success",
+        "routing_decision": decision,
+        "consolidation": consolidation_result
+    }
+
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     index_path = os.path.join(static_dir, "index.html")

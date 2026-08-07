@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-08-08T03:18:00Z",
+  "timestamp": "2026-08-08T08:59:16Z",
   "mcp_server_benchmarks": [
     {
       "operation": "initialize_handshake",
       "trial_count": 5,
-      "avg_latency_ms": 0.002,
+      "avg_latency_ms": 0.004,
       "min_latency_ms": 0.001,
-      "max_latency_ms": 0.005,
+      "max_latency_ms": 0.009,
       "statuses": [
         "success"
       ]
@@ -14,9 +14,9 @@
     {
       "operation": "list_tools_discovery",
       "trial_count": 5,
-      "avg_latency_ms": 3.37,
-      "min_latency_ms": 1.515,
-      "max_latency_ms": 8.848,
+      "avg_latency_ms": 2.315,
+      "min_latency_ms": 1.529,
+      "max_latency_ms": 4.369,
       "statuses": [
         "success"
       ]
@@ -24,7 +24,7 @@
     {
       "operation": "read_lease_policy_resource",
       "trial_count": 5,
-      "avg_latency_ms": 0.013,
+      "avg_latency_ms": 0.015,
       "min_latency_ms": 0.006,
       "max_latency_ms": 0.03,
       "statuses": [
@@ -34,9 +34,9 @@
     {
       "operation": "query_available_units",
       "trial_count": 5,
-      "avg_latency_ms": 1.484,
-      "min_latency_ms": 0.628,
-      "max_latency_ms": 3.021,
+      "avg_latency_ms": 0.725,
+      "min_latency_ms": 0.6,
+      "max_latency_ms": 1.073,
       "statuses": [
         "success"
       ]
@@ -44,9 +44,9 @@
     {
       "operation": "submit_maintenance_request",
       "trial_count": 5,
-      "avg_latency_ms": 17.774,
-      "min_latency_ms": 15.901,
-      "max_latency_ms": 21.416,
+      "avg_latency_ms": 14.095,
+      "min_latency_ms": 13.888,
+      "max_latency_ms": 14.747,
       "statuses": [
         "success"
       ]
@@ -54,9 +54,9 @@
     {
       "operation": "modify_lease_terms_elicitation",
       "trial_count": 5,
-      "avg_latency_ms": 0.911,
-      "min_latency_ms": 0.546,
-      "max_latency_ms": 2.087,
+      "avg_latency_ms": 0.815,
+      "min_latency_ms": 0.559,
+      "max_latency_ms": 1.766,
       "statuses": [
         "elicitation_required"
       ]
@@ -64,9 +64,9 @@
     {
       "operation": "run_property_audit_progress",
       "trial_count": 5,
-      "avg_latency_ms": 1.122,
-      "min_latency_ms": 0.66,
-      "max_latency_ms": 2.169,
+      "avg_latency_ms": 0.639,
+      "min_latency_ms": 0.622,
+      "max_latency_ms": 0.677,
       "statuses": [
         "success"
       ]
@@ -75,8 +75,8 @@
   "retrieval_architecture_benchmarks": [
     {
       "architecture": "Naive RAG",
-      "accuracy_score": "8/12",
-      "accuracy_pct": 66.7,
+      "accuracy_score": "6/12",
+      "accuracy_pct": 50.0,
       "avg_tokens_per_query": 175,
       "avg_latency_sec": 0.0
     },
@@ -85,13 +85,13 @@
       "accuracy_score": "9/12",
       "accuracy_pct": 75.0,
       "avg_tokens_per_query": 210,
-      "avg_latency_sec": 0.001
+      "avg_latency_sec": 0.0
     },
     {
       "architecture": "Agentic RAG (Multi-Hop)",
       "accuracy_score": "11/12",
       "accuracy_pct": 91.7,
-      "avg_tokens_per_query": 391,
+      "avg_tokens_per_query": 410,
       "avg_latency_sec": 0.001
     },
     {
