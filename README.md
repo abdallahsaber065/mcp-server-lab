@@ -1,16 +1,8 @@
-# 🏠 Cornerstone Realty Group — Model Context Protocol (MCP) Server Lab
+# 🏠 Cornerstone Realty Group — Autonomous Agents Lab
 
-> **Course**: Autonomous Agents & AI Systems Lab — Session 2 (MCP Server Lab)  
+> **Course**: Autonomous Agents & AI Systems Lab  
 > **Team Name**: Cornerstone Realty Group B  
-> **Repository**: `abdallahsaber065/mcp-server-lab`  
-
----
-
-## ⭐️ BONUS PRODUCTION FEATURES
-> [!NOTE]
-> In addition to fulfilling all 13 required MCP rubric categories and 8 protocol concerns, this repository includes an **interactive FastAPI Web Application & UI Portal** (`web/app.py`) built as a **production-grade bonus enhancement**.
-> - **Provider-Agnostic LLM Engine** (`web/llm_engine.py`): Connects 10+ free models (Gemini, Mistral, CodeStral, Gemma) to the MCP server via LiteLLM.
-> - **Interactive Web Portal** (`web/static/`): Dark-mode glassmorphism UI supporting live Server-Sent Events (SSE) streaming, interactive Human Elicitation sign-off cards, auto-resizing textareas, and persistent SQLite chat thread management.
+> **Repository**: `abdallahsaber065/mcp-server-lab`
 
 ---
 
@@ -18,140 +10,132 @@
 
 | Name | GitHub Username | Role & Primary Contributions |
 | :--- | :--- | :--- |
-| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead**: FastMCP Server Core, Provider-Agnostic LLM Engine (`web/llm_engine.py`), FastAPI Web Application (`web/app.py`), Capability Negotiation, Human Elicitation (`elicitation/create`), Defensive Pydantic Specs (`extra="forbid"`), Master Pytest Suite, Benchmark Instrumentation, and Tradeoff Analysis |
-| **Omar Tamer** | [`omar-tamer976`](https://github.com/omar-tamer976) | **Database & Policy Owner**: Relational Schema DDL (`db/schema.sql`), Seed Data (`db/seed.sql`), ERD Diagram (`db/erd.mermaid`), Lease Policy Resource (`resources/read`), Prompt Templates (`prompts/get`), and DB Tests (`tests/test_database.py`) |
-| **Ahmed Wael** | [`ahmedeladawy16`](https://github.com/ahmedeladawy16) | **Client Agent & Protocol Owner**: MCP Client Agent (`agent/client.py`), Tool List Change Notifications (`tools/list_changed`), Progress Tracking (`progressToken`), and Client Integration Tests (`tests/test_client.py`) |
+| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead & RAG Architect**: Vector DB with Pre-Search Filtering, Naive/Hybrid/Agentic/Graph RAG (`rag/`), Master Benchmark Runner, Causal Tradeoff README |
+| **Nour Salem** | [`Noursalem2005`](https://github.com/Noursalem2005) | **Memory Systems Lead**: Short-Term Memory Buffer & Scratchpad, Episodic Store & Semantic Consolidation with Contradiction Resolution (`memory/`) |
+| **Ahmed Wael** | [`ahmedeladawy16`](https://github.com/ahmedeladawy16) | **Context Evaluation Lead**: 4 Context Pruning Strategies, 40-Turn Test Suite, Self-RAG Verification (`context_eval/`, `rag/self_rag.py`) |
 
 ---
 
 ## 📌 Problem Framing & Real-World Domain
 
-**Cornerstone Realty Group** manages residential and commercial properties across Cairo and Alexandria. Property managers, lease agents, and maintenance engineers require intelligent assistance to query lease terms, schedule unit viewings, and process maintenance orders.
+**Cornerstone Realty Group** manages residential and commercial properties across Cairo, Alexandria, and Giza. Property managers, lease agents, and maintenance engineers require intelligent assistance to query lease terms, schedule unit viewings, and process maintenance orders — while retaining tenant preferences, allergies, and concession notes across multi-turn sessions.
 
-Giving an LLM direct, raw SQL or shell access to the production real-estate database creates major operational risks:
-- Risk of raw SQL injection or accidental data corruption (`DROP TABLE`, `UPDATE` without `WHERE`).
-- Unauthorized lease modifications or unapproved discount approvals.
-- High latency and unconstrained DB queries.
+### Week 2: MCP Server
+An MCP Server sitting in front of the SQLite database, communicating via JSON-RPC 2.0, ensuring all write operations pass through defensive validation and human sign-off.
 
-### The MCP Solution
-We build an **MCP Server** sitting strictly in front of the SQLite/PostgreSQL relational database. The LLM host communicates exclusively via JSON-RPC 2.0 messages over standard transports (`stdio` for local dev, `Streamable HTTP` for production), ensuring all write operations and data accesses pass through defensive server-side validation and human sign-off.
+### Week 3: Memory & Grounded RAG
+Two core problems solved:
+1. **Session Amnesia**: Agents lose tenant preferences and active constraints when conversation history grows past context budget. Solved via short-term memory buffers, scratchpads, and episodic stores.
+2. **Legal Policy Hallucination**: LLMs fabricate lease terms and penalty clauses. Solved via grounded RAG with real vector indexing, hybrid search, and self-verification.
 
 ---
 
-## 📊 Relational Database Architecture & ERD
+## 🛠️ Architecture Overview
+
+### Week 2 — MCP Protocol (8 Concerns)
+
+| Protocol Concern | Implementation |
+| :--- | :--- |
+| **Capability Negotiation** | `mcp_server/server.py` — declares `elicitation`, `tools/listChanged`, `sampling`, `resources`, `progress` |
+| **Notifications** | `mcp_server/notifications.py` — `tools/list_changed` on role switch |
+| **Human Elicitation** | `mcp_server/elicitation.py` — `elicitation/create` for high-value lease mods |
+| **Resources** | `mcp_server/resources/` — `realty://policies/lease_terms` |
+| **Prompts** | `mcp_server/prompts/` — `draft_lease_notice` template |
+| **Transport** | `stdio` (dev) + `Streamable HTTP` / FastAPI (prod) |
+| **Progress Tracking** | `mcp_server/progress.py` — `progressToken` for batch audits |
+| **Defensive Design** | Pydantic `extra="forbid"`, role-based authorization |
+
+### Week 3 — Memory & RAG Subsystems
 
 ```mermaid
-erDiagram
-    PROPERTIES ||--|{ UNITS : contains
-    UNITS ||--o| LEASES : has
-    TENANTS ||--o| LEASES : signs
-    UNITS ||--o| MAINTENANCE_REQUESTS : reports
-    TENANTS ||--o| MAINTENANCE_REQUESTS : files
-
-    PROPERTIES {
-        int property_id PK
-        string name
-        string city
-        int total_units
-    }
-    UNITS {
-        int unit_id PK
-        int property_id FK
-        string unit_number
-        float monthly_rent
-        string status
-        int is_high_value
-    }
-    TENANTS {
-        int tenant_id PK
-        string full_name
-        string email
-        string role
-    }
-    LEASES {
-        int lease_id PK
-        int unit_id FK
-        int tenant_id FK
-        float monthly_rent
-        int is_active
-        int requires_executive_signoff
-    }
-    MAINTENANCE_REQUESTS {
-        int request_id PK
-        int unit_id FK
-        int tenant_id FK
-        string priority
-        string status
-    }
+graph TD
+    User[User Query] --> Router{Memory Router}
+    Router -->|forget| Discard[Discard Turn]
+    Router -->|episodic| EpiStore[Episodic Store]
+    EpiStore --> Consolidation[Semantic Consolidation]
+    
+    User --> RAG{RAG Pipeline}
+    RAG -->|Naive| VectorDB[(Vector DB<br>HNSW + Cosine)]
+    RAG -->|Hybrid| RRF[Vector + BM25<br>Reciprocal Rank Fusion]
+    RAG -->|Agentic| MultiHop[Query Decomposition<br>& Iterative Retrieval]
+    RAG -->|Graph| KG[Knowledge Graph<br>Entity Traversal]
+    
+    RAG --> SelfRAG[Self-RAG Verifier<br>IsRel + IsSup]
+    SelfRAG --> Answer[Grounded Answer]
 ```
 
 ---
 
-## 🛠️ The 8 MCP Protocol Concerns Implemented
+## 📈 Evidence-Based Benchmarks
 
-| Protocol Concern | Implementation Details & Evidence |
-| :--- | :--- |
-| **1. Capability Negotiation** | Implemented in `mcp_server/server.py` (`get_capabilities()`). Declares `elicitation`, `tools/listChanged`, `sampling`, `resources`, and `progress` support during `initialize`. |
-| **2. Notifications (`tools/list_changed`)** | Server pushes `notifications/tools/list_changed` when user authenticates under a new role (e.g. `tenant` vs `property_manager`), updating client toolset dynamically without reconnecting (`mcp_server/notifications.py`). |
-| **3. Human Elicitation (`elicitation/create`)** | High-risk lease modifications (>15% rent discount or high-value unit) trigger `elicitation/create` mid-call, pausing execution until executive approval is confirmed. |
-| **4. Resources (`resources/read`)** | Master leasing regulations exposed as static resource `realty://policies/lease_terms` for read-only consumption instead of a tool call (`mcp_server/resources/lease_policy.json`). |
-| **5. Prompts (`prompts/get`)** | Parameterized template `draft_lease_notice` exposed via server for standardized client notice drafting (`mcp_server/prompts/templates.py`). |
-| **6. Transport Options** | Supported local `stdio` transport for development and `Streamable HTTP` / FastAPI for production deployment. |
-| **7. Progress Tracking (`progressToken`)** | Batch property compliance audit reports step-by-step percentage progress (`progressToken`) to client host (`mcp_server/progress.py`). |
-| **8. Defensive Tool Design** | Strict Pydantic schemas with `extra="forbid"` (equivalent to `additionalProperties: false`), parameter type bounds, and server-side handler authorization. |
+All results saved to [`benchmarks/benchmark_results.json`](benchmarks/benchmark_results.json).
 
----
+### MCP Server Performance (5 Trials)
 
-## 📈 Evidence-Based Performance Benchmarks
+| Operation | Protocol Concern | Avg Latency | Status |
+| :--- | :--- | :---: | :---: |
+| `initialize_handshake` | Capability Negotiation | **0.002 ms** | `success` |
+| `list_tools_discovery` | Tool Discovery | **3.370 ms** | `success` |
+| `read_lease_policy_resource` | Read Resource | **0.013 ms** | `success` |
+| `query_available_units` | Defensive Tool Call | **1.484 ms** | `success` |
+| `submit_maintenance_request` | Write DB Tool Call | **17.774 ms** | `success` |
+| `modify_lease_terms_elicitation` | Human Elicitation | **0.911 ms** | `elicitation_required` |
+| `run_property_audit_progress` | Progress Tracking | **1.122 ms** | `success` |
 
-All benchmark metrics are recorded over 5 reproducible trials per operation and saved directly to [`benchmarks/benchmark_results.json`](file:///F:/Collage/Autonomous%20Agents/Week%202/benchmarks/benchmark_results.json):
+### Retrieval Architecture Comparison (12 Domain Questions)
 
-| Operation | Protocol Concern | Avg Latency | Min Latency | Max Latency | Status |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **`initialize_handshake`** | Capability Negotiation | **0.004 ms** | 0.002 ms | 0.006 ms | `success` |
-| **`list_tools_discovery`** | Tool Discovery | **5.302 ms** | 1.777 ms | 17.822 ms | `success` |
-| **`read_lease_policy_resource`** | Read Resource | **0.019 ms** | 0.008 ms | 0.035 ms | `success` |
-| **`query_available_units`** | Defensive Tool Call | **0.845 ms** | 0.672 ms | 1.118 ms | `success` |
-| **`submit_maintenance_request`** | Write DB Tool Call | **17.100 ms** | 15.842 ms | 17.783 ms | `success` |
-| **`modify_lease_terms_elicitation`** | Human Elicitation | **0.815 ms** | 0.517 ms | 2.512 ms | `elicitation_required` |
-| **`run_property_audit_progress`** | Progress Tracking | **1.063 ms** | 0.628 ms | 1.397 ms | `success` |
+| Architecture | Accuracy | Avg Tokens/Query | Avg Latency | Tradeoff |
+| :--- | :---: | :---: | :---: | :--- |
+| **Naive RAG** | 8/12 (66.7%) | 175 | <0.001s | Simplest, no keyword matching |
+| **Hybrid Search** (Vector + BM25 RRF) | 9/12 (75.0%) | 210 | 0.001s | Adds BM25 statute bonus |
+| **Agentic RAG** (Multi-Hop) | **11/12 (91.7%)** | 391 | 0.001s | Query decomposition wins on complex questions |
+| **Graph RAG** (Entity Traversal) | 2/12 (16.7%) | 17 | <0.001s | Bonus: structured traversal, needs richer KG |
 
----
+**Causal Analysis**: Agentic RAG's multi-hop decomposition (splitting complex queries into sub-questions) achieves 91.7% accuracy by retrieving evidence per sub-question, but costs 2.2x more tokens than Naive RAG ($O(N)$ per hop). Hybrid Search's BM25 statute bonus lifts citation-heavy questions that pure vector search misses. Graph RAG's sparse coverage reflects the small entity graph — scaling requires integrating the full 60-page binder's statute network.
 
-## 🧠 Causal Tradeoff Analysis & Production Recommendations
+### Context Window Management (40-Turn Test Suite, 10 Variations)
 
-### Causal Tradeoff Analysis
-1. **Raw Database Access vs. MCP Abstraction**:
-   - Direct SQL execution exposes the application to arbitrary code execution, unbounded full-table scans, and schema injection.
-   - MCP tool endpoints encapsulate database logic behind parameterized SQL queries, reducing execution latency to under 18 ms and guaranteeing zero SQL injection vector.
-2. **Tools vs. Resources**:
-   - Static policy documents exposed as tools waste LLM tool calls and context window space.
-   - Modeling leasing regulations as a Resource (`resources/read`) allows the host model to fetch static context once in **0.019 ms** without executing function logic.
-3. **Elicitation Safety vs. Automation**:
-   - Unconstrained LLM write tools risk unauthorized discounts. Intercepting risky actions via `elicitation/create` guarantees zero unapproved lease discounts above 15%.
+| Strategy | Recall Accuracy | Avg Input Tokens | Avg Output Tokens |
+| :--- | :---: | :---: | :---: |
+| Sliding Window (Last 10 Turns) | 0/10 (0%) | 2365 | 120 |
+| **Observation Masking** (Keep Last 3 Tools) | **10/10 (100%)** | **1984** | 200 |
+| Recursive Summarization (Compact Every 15) | 4/10 (40%) | 2281 | 152 |
+| Zone-Based Pruning (4 Progressive Zones) | 0/10 (0%) | 2623 | 120 |
 
-### Production Recommendation
-- **Recommended Transport**: `Streamable HTTP` / FastAPI web service behind OAuth2 / Bearer Authentication.
-- **Provider Agnostic LLM**: Integrated `LiteLLM` engine supporting Gemini, Groq (Llama 3.3), OpenAI (GPT-4o-mini), and Claude seamlessly.
-- **Residual Risks**: Transport layer network latency and client disconnects during elicitation.
-- **Mitigation**: Implement server-side idempotency keys and bounded timeout retries for human elicitation sign-offs.
+**Causal Analysis**: Observation Masking achieves 100% recall at the lowest token cost because tool JSON output is the primary context bloat — not dialogue. Masking older tool responses preserves the critical early constraint (injected at Turn 3) while removing 80%+ of token volume. Sliding Window and Zone-Based pruning discard the early turn entirely, causing 0% recall. Recursive Summarization partially captures the constraint (40%) when the deterministic keyword extractor happens to include it.
 
 ---
 
-## 🚀 Quickstart & Interactive Web Portal
+## 🧠 Self-RAG Verification
 
-### 1. Run Master Pytest Suite (47 Passed)
+The Self-RAG verifier (`rag/self_rag.py`) applies post-retrieval and post-generation critique tokens:
+- **[IsRel]**: Filters irrelevant passages before generation (relevance threshold: 0.5)
+- **[IsSup]**: Rejects hallucinated answers not grounded in retrieved evidence (support threshold: 0.6)
+
+Visible consequence: Unsupported claims are rejected with explicit rationale, triggering query rewrite or fallback escalation.
+
+---
+
+## 🚀 Quickstart
+
+### 1. Run Master Pytest Suite (76 Passed)
 ```powershell
 uv run pytest tests/
 ```
 
-### 2. Run Interactive Web Portal (Bonus Feature: FastAPI + LiteLLM UI)
-```powershell
-uv run python web/app.py
-```
-*Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to chat with any LLM model over the MCP server with live Elicitation, SQLite Multi-Chat history, and Tool Tracing UI.*
-
-### 3. Run Performance Benchmark Suite
+### 2. Run Master Benchmark Suite
 ```powershell
 uv run python benchmarks/run_benchmarks.py
+```
+
+### 3. Run Individual Benchmark Suites
+```powershell
+# MCP Server performance only
+uv run python -c "from benchmarks.run_benchmarks import run_mcp_performance_benchmarks; run_mcp_performance_benchmarks()"
+
+# Retrieval architecture comparison only
+uv run python -c "from benchmarks.run_benchmarks import run_retrieval_architecture_benchmarks; run_retrieval_architecture_benchmarks()"
+
+# Context pruning strategy comparison only
+uv run python -c "from context_eval.run_context_benchmarks import run_all_context_benchmarks; run_all_context_benchmarks()"
 ```
