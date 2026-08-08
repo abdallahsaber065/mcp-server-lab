@@ -17,12 +17,16 @@ logger = logging.getLogger("mcp_web_app")
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from mcp_server.server import CornerstoneMCPServer
-# from mcp_server.rag import knowledge_store  # Week 3: removed — needs update to use top-level rag/
-# from mcp_server.memory import memory_store, RecordMemoryInput  # Week 3: removed — needs update to use top-level memory/
+from rag.pipeline import build_and_seed_vector_store
+from rag.naive_rag import naive_rag_search
+from rag.hybrid_rag import HybridSearchEngine
+from rag.agentic_rag import AgenticRAGRouter
+from rag.graph_rag import PropertyPolicyKnowledgeGraph
 from mcp_server.db_helpers import (
     create_chat_session, get_all_chat_sessions, get_chat_messages,
-    save_chat_message, delete_chat_session
+    save_chat_message, delete_chat_session, get_db_connection
 )
+
 from web.llm_engine import MCPLLMEngine, AVAILABLE_MODELS
 
 app = FastAPI(
@@ -47,6 +51,10 @@ app.add_middleware(
 
 mcp_server = CornerstoneMCPServer()
 llm_engine = MCPLLMEngine(default_model="gemini/gemini-3.1-flash-lite")
+rag_store = build_and_seed_vector_store()
+hybrid_engine = HybridSearchEngine(rag_store)
+agentic_router = AgenticRAGRouter(hybrid_engine)
+graph_rag = PropertyPolicyKnowledgeGraph()
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
@@ -90,6 +98,7 @@ class StreamChatRequest(BaseModel):
     user_message: str
     model: str = "gemini/gemini-3.1-flash-lite"
     role: str = "property_manager"
+    rag_strategy: str = "naive"
     conversation_history: List[Dict[str, Any]] = []
 
 class ElicitationResponse(BaseModel):
@@ -161,8 +170,33 @@ async def list_personas():
     return FIXED_PERSONAS
 @app.get("/api/rag/documents")
 async def list_rag_documents():
-    """Week 3: Disabled — mcp_server/rag removed, needs update to use top-level rag/ package."""
-    return {"status": "disabled", "message": "RAG endpoint needs migration to top-level rag/ package (Week 3)."}
+    """Week 3: List all ingested policy binder documents with metadata."""
+    from rag.pipeline import POLICY_BINDER_CORPUS
+    return {"count": len(POLICY_BINDER_CORPUS), "documents": POLICY_BINDER_CORPUS}
+
+@app.get("/api/rag/search")
+async def rag_search(query: str, top_k: int = 3, strategy: str = "naive"):
+    """Week 3: Search over the policy binder using selected RAG strategy."""
+    if strategy == "hybrid":
+        results = hybrid_engine.search(query, top_k=top_k)
+    elif strategy == "agentic":
+        result = agentic_router.reason_and_retrieve(query)
+        results = [{"payload": e, "metadata": {}, "score": 0} for e in result["evidence"]]
+    elif strategy == "graph":
+        graph_result = graph_rag.query_graph(query)
+        results = [{"payload": str(graph_result), "metadata": {}, "score": 0}]
+    else:
+        results = naive_rag_search(query=query, vector_store=rag_store, top_k=top_k)
+    return {"query": query, "strategy": strategy, "results": results}
+
+@app.get("/api/benchmarks")
+async def get_benchmarks():
+    """Week 3: Return benchmark results from benchmark_results.json."""
+    bench_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "benchmarks", "benchmark_results.json")
+    if os.path.exists(bench_path):
+        with open(bench_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"error": "No benchmark results found."}
 
 
 @app.get("/api/memory/{tenant_id}")
@@ -226,6 +260,17 @@ async def read_resource(uri: str = "realty://policies/lease_terms"):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@app.get("/api/prompts")
+async def list_prompts():
+    return mcp_server.list_prompts()
+
+@app.get("/api/prompt/get")
+async def get_prompt(name: str = "draft_lease_notice", tenant_email: str = "tenant@example.com", proposed_rent: str = "15000"):
+    try:
+        return mcp_server.get_prompt(name, {"tenant_email": tenant_email, "proposed_rent": proposed_rent})
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 @app.post("/api/chat/stream")
 async def chat_stream_endpoint(req: StreamChatRequest):
     # Fetch prior history from SQLite for multi-turn context
@@ -239,7 +284,52 @@ async def chat_stream_endpoint(req: StreamChatRequest):
 
     # Save current user prompt to SQLite
     save_chat_message(session_id=req.session_id, msg_type="user", content=req.user_message)
+    
+    # Enforce title update on first user message
+    if req.user_message and req.user_message.strip():
+        try:
+            conn = get_db_connection()
+            with conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM chat_messages WHERE session_id = ? AND msg_type = 'user';", (req.session_id,))
+                cnt = cur.fetchone()[0]
+                if cnt <= 1:
+                    snip = req.user_message.strip()[:35] + ("..." if len(req.user_message.strip()) > 35 else "")
+                    conn.execute("UPDATE chat_sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?;", (snip, req.session_id))
+            conn.close()
+        except Exception as e:
+            logger.error(f"Failed to update session title in endpoint: {e}")
+
     system_prompt = build_system_prompt(req.role)
+
+
+    # Inject RAG context based on selected strategy
+    rag_context = ""
+    if req.rag_strategy == "hybrid":
+        search_results = hybrid_engine.search(req.user_message, top_k=3)
+        rag_context = "\n\nHYBRID RAG CONTEXT (Vector + BM25 Keyword Fusion):\n"
+        for r in search_results:
+            rag_context += f"- {r['payload'][:200]}\n"
+    elif req.rag_strategy == "agentic":
+        agentic_result = agentic_router.reason_and_retrieve(req.user_message)
+        rag_context = "\n\nAGENTIC RAG CONTEXT (Multi-Hop Decomposition):\n"
+        rag_context += f"Sub-queries: {', '.join(agentic_result['sub_queries'])}\n"
+        for e in agentic_result["evidence"]:
+            rag_context += f"- {e[:200]}\n"
+    elif req.rag_strategy == "graph":
+        graph_result = graph_rag.query_graph(req.user_message)
+        rag_context = "\n\nGRAPH RAG CONTEXT (Entity Traversal):\n"
+        rag_context += f"Matched entities: {', '.join(graph_result['matched_entities'])}\n"
+        for p in graph_result["paths"]:
+            rag_context += f"- {p['source']} --[{p['relation']}]--> {p['target']}\n"
+    elif req.rag_strategy == "naive":
+        search_results = naive_rag_search(query=req.user_message, vector_store=rag_store, top_k=3)
+        rag_context = "\n\nNAIVE RAG CONTEXT (Dense Vector Similarity):\n"
+        for r in search_results:
+            rag_context += f"- {r['payload'][:200]}\n"
+
+    if rag_context:
+        system_prompt += rag_context
     
     stream_gen = llm_engine.execute_agent_loop_stream(
         mcp_server_instance=mcp_server,

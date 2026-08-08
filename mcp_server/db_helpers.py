@@ -149,15 +149,33 @@ def save_chat_message(
         ))
         msg_id = cur.lastrowid
         
-        # Update session title if user message and first prompt
+        # Update session title on first user message in session
         if msg_type == 'user' and content:
-            snippet = content[:35] + ("..." if len(content) > 35 else "")
-            conn.execute("UPDATE chat_sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ? AND title = 'محادثة جديدة';", (snippet, session_id))
+            clean_content = content.strip()
+            if clean_content:
+                snippet = clean_content[:35] + ("..." if len(clean_content) > 35 else "")
+                cur.execute("SELECT title FROM chat_sessions WHERE session_id = ?;", (session_id,))
+                t_row = cur.fetchone()
+                current_title = t_row[0] if t_row else ""
+                
+                cur.execute("SELECT COUNT(*) FROM chat_messages WHERE session_id = ? AND msg_type = 'user';", (session_id,))
+                user_msg_count = cur.fetchone()[0]
+                
+                if user_msg_count <= 1 or any(k in current_title.strip().lower() for k in ['new conversation', 'new chat', 'محادثة جديدة', '']):
+                    conn.execute("UPDATE chat_sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?;", (snippet, session_id))
+
+                else:
+                    conn.execute("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?;", (session_id,))
+            else:
+                conn.execute("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?;", (session_id,))
         else:
             conn.execute("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE session_id = ?;", (session_id,))
 
     conn.close()
     return msg_id
+
+
+
 
 def delete_chat_session(session_id: str) -> bool:
     init_db(reset=False)
