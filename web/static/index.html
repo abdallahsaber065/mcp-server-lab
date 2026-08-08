@@ -1,158 +1,171 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cornerstone Realty — MCP Autonomous Portal (Session 2)</title>
+  <title>Cornerstone Realty — Autonomous AI Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/chat.css">
+  <link rel="stylesheet" href="/static/css/status.css">
+  <link rel="stylesheet" href="/static/css/showcase.css">
 </head>
-<body dir="rtl">
-  <div class="app-viewport">
+<body class="no-animation">
+  <div class="app-shell">
 
-    <div class="grid-layout">
-      
-      <!-- Sidebar Controls & Chat Sessions List -->
-      <div class="sidebar">
-        
-        <!-- Brand & System Info -->
-        <div class="card">
-          <div class="brand-sidebar">
-            <div class="brand-icon-sm">🏢</div>
-            <div>
-              <h2>Cornerstone Realty</h2>
-              <p>MCP Autonomous Portal (Session 2)</p>
-            </div>
-          </div>
-          
-          <button class="btn-new-chat" onclick="createNewChatSession()">
-            <span>➕</span> محادثة جديدة
-          </button>
-
-          <div class="card-title" style="margin-bottom: 0.5rem;">💬 سجل المحادثات</div>
-          <div class="chat-session-list" id="chatSessionList">
-            <!-- Populated dynamically via app.js from SQLite DB -->
-          </div>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="8" fill="url(#brandGrad)"/>
+            <path d="M8 22V12l8-6 8 6v10l-8 4-8-4z" stroke="#fff" stroke-width="1.5" fill="none"/>
+            <path d="M16 16v10M8 12l8 4 8-4" stroke="#fff" stroke-width="1.5" opacity="0.5"/>
+            <defs><linearGradient id="brandGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
+          </svg>
         </div>
-
-        <!-- Protocol Concerns Status -->
-        <div class="card" style="flex: 1;">
-          <div class="card-title" style="text-align: right;">🔌 Protocol Concerns Live</div>
-          <ul class="caps-list">
-            <li>
-              <span class="concern-name">Capability Negotiation</span>
-              <span class="val">INITIALIZED</span>
-            </li>
-            <li>
-              <span class="concern-name">Notifications (list_changed)</span>
-              <span class="val" id="notifStatus">ACTIVE</span>
-            </li>
-            <li>
-              <span class="concern-name">Human Elicitation</span>
-              <span class="val">ENABLED</span>
-            </li>
-            <li>
-              <span class="concern-name">Read Resources</span>
-              <span class="val">ACTIVE</span>
-            </li>
-            <li>
-              <span class="concern-name">Progress Tracking</span>
-              <span class="val">ENABLED</span>
-            </li>
-            <li>
-              <span class="concern-name">Defensive Pydantic Specs</span>
-              <span class="val">FORBID EXTRA</span>
-            </li>
-            <li>
-              <span class="concern-name">Smart Text Direction</span>
-              <span class="val">AUTO LTR/RTL</span>
-            </li>
-            <li>
-              <span class="concern-name">SQLite Chat DB</span>
-              <span class="val">PERSISTENT</span>
-            </li>
-          </ul>
-        </div>
-
-        <!-- RAG & Episodic Memory Live Add-On Cards -->
-        <div class="card" style="margin-top: 0.75rem;">
-          <div class="card-title" style="text-align: right; display: flex; align-items: center; justify-content: space-between;">
-            <span>📚 Option A: RAG Store</span>
-            <span style="font-size: 0.7rem; background: #6366f1; color: #fff; padding: 2px 6px; border-radius: 8px;">BM25 Engine</span>
-          </div>
-          <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.4rem;">Unstructured domain policies & by-laws indexed:</p>
-          <div id="ragDocsList" style="font-size: 0.73rem; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; max-height: 90px; overflow-y: auto; color: #e2e8f0; line-height: 1.3;">
-            Loading knowledge base chunks...
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 0.75rem;">
-          <div class="card-title" style="text-align: right; display: flex; align-items: center; justify-content: space-between;">
-            <span>🧠 Option B: Agent Memory</span>
-            <span style="font-size: 0.7rem; background: #10b981; color: #fff; padding: 2px 6px; border-radius: 8px;">Episodic Store</span>
-          </div>
-          <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.4rem;">Active user recalled memories:</p>
-          <div id="memoryList" style="font-size: 0.73rem; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 6px; max-height: 100px; overflow-y: auto; color: #e2e8f0; line-height: 1.3;">
-            Loading tenant memories...
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Main Chat Container -->
-      <div class="card chat-box" dir="ltr">
-        
-        <!-- Chat Header Bar with Role and Model Selectors -->
-        <div class="chat-header">
-          <div class="card-title" style="margin-bottom: 0;">💬 Cornerstone Assistant</div>
-          
-          <div class="chat-header-actions">
-            
-            <!-- Role Selector with Icon -->
-            <div class="select-wrapper">
-              <span class="select-icon">⚙️</span>
-              <select id="roleSelect" class="select-control-custom role-select-width" onchange="onRoleChange()">
-                <option value="property_manager">Property Manager</option>
-                <option value="executive_admin">Executive Admin</option>
-                <option value="tenant">Tenant</option>
-              </select>
-            </div>
-
-            <!-- Model Selector with Icon -->
-            <div class="select-wrapper">
-              <span class="select-icon">🤖</span>
-              <select id="modelSelect" class="select-control-custom model-select-width">
-                <!-- Populated via app.js -->
-              </select>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Active Persona Info Bar -->
-        <div id="personaBanner" class="persona-banner" style="background: rgba(99, 102, 241, 0.08); border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding: 6px 16px; font-size: 0.82rem; color: #cbd5e1; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-          <span id="personaInfo">👤 <strong>User:</strong> Loading persona...</span>
-          <span id="personaRoleBadge" style="background: #3b82f6; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 600;">PROPERTY MANAGER</span>
-        </div>
-        
-        <!-- Chat History Container -->
-        <div class="chat-history" id="chatHistory">
-          <!-- Populated from SQLite DB via app.js -->
-        </div>
-
-        <!-- Chat Input Area -->
-        <div class="chat-input-area">
-          <textarea id="userInput" rows="1" class="form-control chat-input" placeholder="اكتب سؤالك أو طلبك هنا (مثال: ابحث عن الشقق المتاحة في القاهرة)..." onkeydown="handleKeyDown(event)" oninput="autoResizeTextarea(this)"></textarea>
-          <button class="btn" onclick="sendChatMessageStream()">إرسال</button>
+        <div class="brand-text">
+          <h1>Cornerstone</h1>
+          <p>Autonomous AI Portal</p>
         </div>
       </div>
 
-    </div>
+      <!-- New Chat Button -->
+      <div class="sidebar-new-chat">
+        <button class="btn-new-chat" onclick="createNewChatSession()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span class="new-chat-label">New Chat</span>
+        </button>
+      </div>
 
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+        <button class="nav-btn" data-page="chat" onclick="switchPage('chat')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Chat</span>
+        </button>
+        <button class="nav-btn" data-page="status" onclick="switchPage('status')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span>Status</span>
+        </button>
+        <button class="nav-btn" data-page="showcase" onclick="switchPage('showcase')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>Showcase</span>
+        </button>
+      </nav>
+
+      <!-- Chat History (only visible on chat page) -->
+      <div class="sidebar-section" id="chatHistorySection">
+        <div class="section-header">
+          <span>Conversations</span>
+        </div>
+        <div class="session-list" id="chatSessionList"></div>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="footer-stat">
+          <span class="stat-dot"></span>
+          <span class="footer-label">76/76 tests passing</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Sidebar Toggle Button -->
+    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Collapse sidebar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- Chat Page -->
+      <div class="page page-chat" id="page-chat">
+
+        <div class="chat-container">
+          <div class="chat-header">
+            <div class="chat-header-left">
+              <h2>Cornerstone Assistant</h2>
+            </div>
+            <div class="chat-header-actions">
+              <div class="select-group">
+                <label>Role</label>
+                <select id="roleSelect" onchange="onRoleChange()">
+                  <option value="property_manager">Property Manager</option>
+                  <option value="executive_admin">Executive Admin</option>
+                  <option value="tenant">Tenant</option>
+                </select>
+              </div>
+              <div class="select-group">
+                <label>Model</label>
+                <select id="modelSelect"></select>
+              </div>
+              <div class="select-group">
+                <label>RAG</label>
+                <select id="ragSelect">
+                  <option value="naive">Naive RAG</option>
+                  <option value="hybrid">Hybrid (BM25+Vector)</option>
+                  <option value="agentic">Agentic (Multi-Hop)</option>
+                  <option value="graph">Graph (Entities)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div id="personaBanner" class="persona-banner">
+            <span id="personaInfo">Loading persona...</span>
+            <span id="personaRoleBadge" class="role-badge">PROPERTY MANAGER</span>
+          </div>
+
+          <div class="chat-history" id="chatHistory"></div>
+
+          <div class="thinking-indicator" id="thinkingIndicator" style="display:none;">
+            <div class="thinking-dots"><span></span><span></span><span></span></div>
+            <span>AI is reasoning...</span>
+          </div>
+
+          <div class="chat-input-area">
+            <textarea id="userInput" rows="1" placeholder="Ask about properties, leases, maintenance..." onkeydown="handleKeyDown(event)" oninput="autoResizeTextarea(this)"></textarea>
+            <button class="btn-send" onclick="sendChatMessageStream()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Page -->
+      <div class="page page-status" id="page-status">
+        <div class="page-header">
+          <h2>System Status</h2>
+          <p>Live protocol concerns, RAG store health, and memory subsystem state.</p>
+        </div>
+        <div class="status-container" id="statusContainer">
+          <div class="status-skeleton"></div>
+        </div>
+      </div>
+
+      <!-- Showcase Page -->
+      <div class="page page-showcase" id="page-showcase">
+        <div class="showcase-hero">
+          <div class="hero-badge">Week 2 + Week 3 Complete</div>
+          <h1>Cornerstone Realty<br>Autonomous AI System</h1>
+          <p>A production-grade MCP server with multi-architecture RAG, memory subsystems, context management, and an interactive web portal.</p>
+          <div class="hero-stats" id="heroStats"></div>
+        </div>
+        <div class="showcase-content" id="showcaseContent">
+          <div class="status-skeleton"></div>
+          <div class="status-skeleton"></div>
+        </div>
+      </div>
+
+    </main>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/chat.js"></script>
+  <script src="/static/js/status.js"></script>
+  <script src="/static/js/showcase.js"></script>
 </body>
 </html>

@@ -34,8 +34,8 @@ class CornerstoneMCPServer:
         return {
             "capabilities": {
                 "tools": {"listChanged": True},
-                "resources": {"subscribe": False},
-                "prompts": {},
+                "resources": {"subscribe": False, "listChanged": False},
+                "prompts": {"listChanged": True},
                 "elicitation": {"supported": True},
                 "sampling": {"supported": True},
                 "progress": {"supported": True}
@@ -46,6 +46,7 @@ class CornerstoneMCPServer:
             },
             "protocolVersion": self.protocol_version
         }
+
 
     def list_tools(self, role: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return available tools filtered by authenticated user role."""
