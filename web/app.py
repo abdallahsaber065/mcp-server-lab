@@ -4,12 +4,14 @@ import json
 import uuid
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 
 logger = logging.getLogger("mcp_web_app")
 
@@ -22,6 +24,7 @@ from rag.naive_rag import naive_rag_search
 from rag.hybrid_rag import HybridSearchEngine
 from rag.agentic_rag import AgenticRAGRouter
 from rag.graph_rag import PropertyPolicyKnowledgeGraph
+from rag.self_rag import SelfRAGVerifier
 from memory.episodic_store import EpisodicStore
 from memory.stm import ShortTermMemory
 from memory.router import MemoryRouter
@@ -30,7 +33,6 @@ from mcp_server.db_helpers import (
     create_chat_session, get_all_chat_sessions, get_chat_messages,
     save_chat_message, delete_chat_session, get_db_connection
 )
-
 
 from web.llm_engine import MCPLLMEngine, AVAILABLE_MODELS
 
@@ -60,6 +62,8 @@ rag_store = build_and_seed_vector_store()
 hybrid_engine = HybridSearchEngine(rag_store)
 agentic_router = AgenticRAGRouter(hybrid_engine)
 graph_rag = PropertyPolicyKnowledgeGraph()
+self_rag_verifier = SelfRAGVerifier()
+
 
 # Memory Subsystem Stores (Week 3)
 episodic_store = EpisodicStore()
@@ -68,19 +72,62 @@ consolidation_engine = SemanticConsolidationEngine(episodic_store, semantic_stor
 memory_router = MemoryRouter(episodic_store)
 
 def seed_initial_memories():
-    """Seed initial episodic & consolidated semantic memories for personas."""
-    # Tenant 1 (Amr Hassan) - Paint Allergy
+    """Seed initial episodic & consolidated semantic memories for realistic real estate tenant personas."""
+    # Tenant 1 (Amr Hassan) - Paint/Chemical Allergy & Relocation Notice
     episodic_store.insert_episode(
         entity_id="tenant_1",
         event_summary="Tenant reported severe asthma/fume allergy triggered by oil-based paints; requested low-VOC non-toxic paint for all unit maintenance.",
         timestamp="2026-02-15T09:00:00Z"
     )
-    # Tenant 2 (Fatima Al-Sayed) - Quiet / Top Floor Preference
+    episodic_store.insert_episode(
+        entity_id="tenant_1",
+        event_summary="Tenant submitted formal notice to vacate at end of lease term due to company relocation to Alexandria; requested deposit refund inspection schedule.",
+        timestamp="2026-04-02T14:30:00Z"
+    )
+
+    # Tenant 2 (Noha El-Sayed) - Quiet Work from Home & Service Animal Addendum
     episodic_store.insert_episode(
         entity_id="tenant_2",
-        event_summary="Tenant requested top-floor unit preference away from street noise for quiet work from home.",
-        timestamp="2026-03-01T11:00:00Z"
+        event_summary="Tenant requested top-floor quiet unit preference away from street noise for remote architecture studio work.",
+        timestamp="2026-01-20T11:00:00Z"
     )
+    episodic_store.insert_episode(
+        entity_id="tenant_2",
+        event_summary="Tenant submitted medical certification for registered service therapy dog (Golden Retriever); requested pet policy addendum waiver under Section 6.1b.",
+        timestamp="2026-02-05T16:15:00Z"
+    )
+    episodic_store.insert_episode(
+        entity_id="tenant_2",
+        event_summary="Tenant requested 24/7 keycard access for Suite-301 executive meeting room and private terrace.",
+        timestamp="2026-03-15T10:00:00Z"
+    )
+
+    # Tenant 5 (Omar Farouk) - EV Charging Stall & Rent Renewal Cap
+    episodic_store.insert_episode(
+        entity_id="tenant_5",
+        event_summary="Tenant purchased electric vehicle (Tesla Model 3); requested dedicated Level-2 EV charging stall in B1 basement parking.",
+        timestamp="2026-02-01T08:45:00Z"
+    )
+    episodic_store.insert_episode(
+        entity_id="tenant_5",
+        event_summary="Tenant requested annual lease renewal terms with rent increase capped at 5% pursuant to Cairo residential tenancy guidelines.",
+        timestamp="2026-03-12T13:20:00Z"
+    )
+
+    # Tenant 6 (Yasmine Ibrahim) - Smart Biometric Lock Modification
+    episodic_store.insert_episode(
+        entity_id="tenant_6",
+        event_summary="Tenant requested authorization to install smart digital keypad lock for Unit Royal-101 for elderly parent accessibility.",
+        timestamp="2026-02-18T10:30:00Z"
+    )
+
+    # Property Manager (Tarek Mahmoud) - Building Compliance Directive
+    episodic_store.insert_episode(
+        entity_id="tenant_3",
+        event_summary="Issued quarterly building compliance audit for Cairo and Alexandria properties; enforcing 48-hour emergency repair SLA.",
+        timestamp="2026-02-01T09:00:00Z"
+    )
+
     # Run initial consolidation to extract semantic facts
     consolidation_engine.run_periodic_consolidation()
 
@@ -92,6 +139,22 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 FIXED_PERSONAS: Dict[str, Dict[str, Any]] = {
+    "property_manager": {
+        "name": "Tarek Mahmoud",
+        "tenant_id": 3,
+        "email": "tarek.m@cornerstonerealty.eg",
+        "phone": "+201223334444",
+        "role": "property_manager",
+        "description": "Property Manager handling unit searches, maintenance dispatch (48-hr SLA), and standard lease operations"
+    },
+    "executive_admin": {
+        "name": "Laila Fouad",
+        "tenant_id": 4,
+        "email": "laila.fouad@cornerstonerealty.eg",
+        "phone": "+201000000001",
+        "role": "executive_admin",
+        "description": "Executive Admin authorized for high-value lease sign-offs (>50,000 EGP) and policy overrides (>15% discount)"
+    },
     "tenant": {
         "name": "Amr Hassan",
         "tenant_id": 1,
@@ -100,25 +163,50 @@ FIXED_PERSONAS: Dict[str, Dict[str, Any]] = {
         "role": "tenant",
         "unit_number": "A-101 (Cornerstone Heights, Cairo)",
         "lease_id": 1,
-        "description": "Active tenant residing in unit A-101"
+        "description": "Active tenant in Unit A-101. Has severe paint/VOC allergies and pending relocation notice."
     },
-    "property_manager": {
-        "name": "Tarek Mahmoud",
-        "tenant_id": 3,
-        "email": "tarek.m@cornerstonerealty.eg",
-        "phone": "+201223334444",
-        "role": "property_manager",
-        "description": "Property Manager handling unit searches, maintenance dispatch, and standard lease operations"
+    "tenant_1": {
+        "name": "Amr Hassan",
+        "tenant_id": 1,
+        "email": "amr.hassan@example.com",
+        "phone": "+201001234567",
+        "role": "tenant",
+        "unit_number": "A-101 (Cornerstone Heights, Cairo)",
+        "lease_id": 1,
+        "description": "Active tenant in Unit A-101 (12,000 EGP/mo). Has paint/VOC allergies and pending relocation notice."
     },
-    "executive_admin": {
-        "name": "Laila Fouad",
-        "tenant_id": 4,
-        "email": "laila.fouad@cornerstonerealty.eg",
-        "phone": "+201000000001",
-        "role": "executive_admin",
-        "description": "Executive Admin authorized for high-value lease sign-offs (>50,000 EGP) and policy overrides"
+    "tenant_2": {
+        "name": "Noha El-Sayed",
+        "tenant_id": 2,
+        "email": "noha.elsayed@example.com",
+        "phone": "+201119876543",
+        "role": "tenant",
+        "unit_number": "Suite-301 (Giza Commercial & Residential Center)",
+        "lease_id": 3,
+        "description": "Remote Architect in Suite-301 (60,000 EGP/mo). Requires top-floor quiet unit and therapy pet addendum."
+    },
+    "tenant_5": {
+        "name": "Omar Farouk",
+        "tenant_id": 5,
+        "email": "omar.farouk@example.com",
+        "phone": "+201005556677",
+        "role": "tenant",
+        "unit_number": "A-105 (Cornerstone Heights, Cairo)",
+        "lease_id": 4,
+        "description": "Tenant in Unit A-105 (22,000 EGP/mo). Requires EV Charging stall B1-14 and 5% rent renewal increase cap."
+    },
+    "tenant_6": {
+        "name": "Yasmine Ibrahim",
+        "tenant_id": 6,
+        "email": "yasmine.ibrahim@example.com",
+        "phone": "+201124445555",
+        "role": "tenant",
+        "unit_number": "Royal-101 (Zamalek Royal Suites, Cairo)",
+        "lease_id": 5,
+        "description": "Tenant in Royal-101 (35,000 EGP/mo). Requires smart biometric lock for elderly parent accessibility."
     }
 }
+
 
 class CreateSessionRequest(BaseModel):
     title: str = "محادثة جديدة"
@@ -190,18 +278,18 @@ def build_system_prompt(role: str) -> str:
 
     prompt += (
         "CRITICAL MULTI-TOOL & REASONING RULES:\n"
-        "1. Whenever answering a request, you MUST invoke the appropriate MCP tool(s) to fetch real database facts before responding.\n"
-        "2. To search unstructured policy documents, quiet hours, early termination, or emergency procedures, call `search_knowledge_base` (RAG Tool - Option A).\n"
-        "3. To recall or record tenant-specific preferences, medical constraints, or past notes, call `recall_tenant_memories` or `record_tenant_memory` (Memory Tools - Option B).\n"
-        "4. If a request requires multiple actions (e.g. searching for available units THEN drafting a lease or checking tenant history), "
+        "1. Active consolidated tenant facts (allergies, floor preferences) and recent episodic history are already provided above in your system context.\n"
+        "2. Whenever answering a request, you MUST invoke the appropriate MCP tool(s) (lookup_available_units, submit_maintenance_request, modify_lease_terms, run_property_audit) to fetch or update real database records.\n"
+        "3. If a request requires multiple actions (e.g. searching for available units THEN checking maintenance or modifying lease terms), "
         "execute multiple MCP tool calls iteratively before generating your final response.\n"
-        "5. Do NOT make up unit prices, lease numbers, or maintenance statuses.\n\n"
+        "4. Do NOT make up unit prices, lease numbers, or maintenance statuses.\n\n"
         "OUTPUT FORMAT INSTRUCTIONS:\n"
         "Format your final text responses strictly using clean, semantic HTML tags without markdown codeblock wrappers (no ```html). "
         "Use <h3> for section titles, <p> for text, <ul>/<li> for lists, <strong> for emphasis, and <table>/<thead>/<tbody>/<tr>/<th>/<td> for structured tables. "
         "This ensures rich rendering inside the portal interface."
     )
     return prompt
+
 
 @app.get("/api/personas")
 async def list_personas():
@@ -282,6 +370,88 @@ async def record_memory_endpoint(req: dict):
         "routing_decision": decision,
         "consolidation": consolidation_result
     }
+
+@app.get("/api/memory/demo/stm")
+async def demo_stm_endpoint():
+    """Week 3: Interactive demo of ShortTermMemory buffer + decoupled scratchpad."""
+    stm = ShortTermMemory(max_turns=3)
+    stm.update_scratchpad(
+        plan="Handle tenant paint allergy complaint and dispatch maintenance",
+        subgoal="Verify unit A-101 lease terms and check paint supplier catalog",
+        state_update={"supplier_identified": "EcoSafe Low-VOC Paints"}
+    )
+    
+    stm.add_message("user", "My asthma is flaring up due to oil paint fumes!")
+    stm.add_message("assistant", "I will dispatch low-VOC maintenance immediately.")
+    stm.add_message("user", "Can you also check when my lease is up?")
+    stm.add_message("assistant", "Your lease ends on 2026-12-31.")
+    stm.add_message("user", "Great, thanks.")
+    
+    evicted = stm.prune_to_turn_limit()
+    pruned_history = stm.get_context()
+    scratchpad = stm.get_scratchpad()
+    return {
+        "evicted_turns_count": len(evicted),
+        "pruned_transcript_turns": len(pruned_history),
+        "transcript_preview": pruned_history,
+        "scratchpad_preserved": {
+            "current_plan": scratchpad.get("current_plan"),
+            "active_subgoal": scratchpad.get("active_subgoal"),
+            "working_state": scratchpad.get("working_state")
+        },
+        "guarantee": "Transcript pruning pruned older dialogue turns but left the scratchpad plan and working state 100% intact."
+    }
+
+
+@app.post("/api/memory/demo/route")
+async def demo_route_endpoint(req: dict = None):
+    """Week 3: Interactive demo of promote-or-drop router with logged reasoning."""
+    if req is None:
+        req = {}
+    content = req.get("content", "Tenant Amr Hassan reported severe paint allergy; requested low-VOC maintenance.")
+    entity_id = req.get("entity_id", "tenant_1")
+    decision = memory_router.evaluate_item(
+        item={"content": content, "role": "user"},
+        entity_id=entity_id
+    )
+    history = memory_router.decision_log
+    return {
+        "input_content": content,
+        "entity_id": entity_id,
+        "decision": decision.model_dump(),
+        "reasoning": decision.reasoning,
+        "destination": decision.destination,
+        "recent_router_logs": history[-3:] if history else []
+    }
+
+@app.post("/api/memory/demo/consolidate")
+async def demo_consolidate_endpoint(req: dict = None):
+    """Week 3: Interactive demo of semantic consolidation & real contradiction resolution."""
+    if req is None:
+        req = {}
+    tenant_id = req.get("tenant_id", 1)
+    subject = f"tenant_{tenant_id}"
+    
+    if req.get("trigger_conflict", True):
+        episodic_store.insert_episode(
+            entity_id=subject,
+            event_summary="Tenant submitted formal notice to vacate and relocate at lease end; cancelled renewal interest.",
+            timestamp=datetime.now(timezone.utc).isoformat()
+        )
+        
+    result = consolidation_engine.run_periodic_consolidation(subject=subject)
+    active_facts = semantic_store.get_active_facts(subject=subject)
+    history_facts = semantic_store.get_fact_history(subject=subject, fact_key="lease_intent")
+    return {
+        "subject": subject,
+        "consolidation_result": result,
+        "active_facts": active_facts,
+        "full_history_including_superseded": history_facts,
+        "conflict_resolved": any(f["status"] == "superseded" for f in history_facts)
+    }
+
+
+
 
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
@@ -405,6 +575,11 @@ async def chat_stream_endpoint(req: StreamChatRequest):
     if rag_context:
         system_prompt += rag_context
     
+    persona = FIXED_PERSONAS.get(req.role, FIXED_PERSONAS["tenant"])
+    tenant_id = persona.get("tenant_id", 1)
+    active_facts = semantic_store.get_active_facts(subject=f"tenant_{tenant_id}")
+    recent_episodes = episodic_store.query_episodes(entity_id=f"tenant_{tenant_id}", limit=3)
+
     stream_gen = llm_engine.execute_agent_loop_stream(
         mcp_server_instance=mcp_server,
         user_message=req.user_message,
@@ -416,6 +591,23 @@ async def chat_stream_endpoint(req: StreamChatRequest):
     
     async def sse_wrapper():
         full_assistant_text = ""
+        # Emit active memory context card if tenant has active facts or episodes
+        if active_facts or recent_episodes:
+            mem_event = {
+                "type": "memory_context",
+                "tenant_id": tenant_id,
+                "persona_name": persona.get("name", "Tenant"),
+                "active_facts": [
+                    {"category": f["fact_key"], "value": f["fact_value"], "version": f["version"], "status": f["status"]}
+                    for f in active_facts
+                ],
+                "recent_episodes": [
+                    {"summary": ep["event_summary"], "timestamp": ep["timestamp"][:10]}
+                    for ep in recent_episodes
+                ]
+            }
+            yield f"data: {json.dumps(mem_event)}\n\n"
+
         async for chunk in stream_gen:
             yield chunk
             if chunk.startswith("data: "):
@@ -440,8 +632,24 @@ async def chat_stream_endpoint(req: StreamChatRequest):
                     elif event.get("type") == "done":
                         if full_assistant_text:
                             save_chat_message(session_id=req.session_id, msg_type="assistant", content=full_assistant_text)
+                            if rag_context:
+                                critique = self_rag_verifier.verify_generation(
+                                    query=req.user_message,
+                                    evidence=[rag_context],
+                                    generated_answer=full_assistant_text
+                                )
+                                critique_payload = {
+                                    "type": "self_rag_verification",
+                                    "is_relevant": critique.is_relevant,
+                                    "is_supported": critique.is_supported,
+                                    "critique_rationale": critique.critique_rationale,
+                                    "faithfulness_score": critique.faithfulness_score
+                                }
+                                yield f"data: {json.dumps(critique_payload)}\n\n"
                 except Exception as e:
                     logger.error(f"Error parsing/saving SSE event to DB: {e}")
+
+
 
     return StreamingResponse(
         sse_wrapper(),

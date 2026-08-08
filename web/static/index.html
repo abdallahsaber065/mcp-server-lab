@@ -91,11 +91,14 @@
             </div>
             <div class="chat-header-actions">
               <div class="select-group">
-                <label>Role</label>
+                <label>Role / Persona</label>
                 <select id="roleSelect" onchange="onRoleChange()">
-                  <option value="property_manager">Property Manager</option>
-                  <option value="executive_admin">Executive Admin</option>
-                  <option value="tenant">Tenant</option>
+                  <option value="property_manager">Property Manager (Tarek Mahmoud)</option>
+                  <option value="executive_admin">Executive Admin (Laila Fouad)</option>
+                  <option value="tenant_1">Tenant #1: Amr Hassan (A-101, Cairo)</option>
+                  <option value="tenant_2">Tenant #2: Noha El-Sayed (Suite-301, Giza)</option>
+                  <option value="tenant_5">Tenant #5: Omar Farouk (A-105, Cairo)</option>
+                  <option value="tenant_6">Tenant #6: Yasmine Ibrahim (Royal-101, Zamalek)</option>
                 </select>
               </div>
               <div class="select-group">
@@ -103,7 +106,7 @@
                 <select id="modelSelect"></select>
               </div>
               <div class="select-group">
-                <label>RAG</label>
+                <label>RAG Strategy</label>
                 <select id="ragSelect">
                   <option value="naive">Naive RAG</option>
                   <option value="hybrid">Hybrid (BM25+Vector)</option>

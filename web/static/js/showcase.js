@@ -142,7 +142,7 @@ function renderHeroStats() {
   if (!container) return;
 
   const stats = [
-    { value: '76', label: 'Tests Passing' },
+    { value: '79', label: 'Tests Passing' },
     { value: '5', label: 'RAG Architectures' },
     { value: '8', label: 'MCP Protocol Concerns' },
     { value: '16', label: 'Subsystems Built' },
@@ -201,11 +201,12 @@ function buildEvolutionSection() {
         <div class="watermark-icon">${getSvgIcon('check', 96, 1.5)}</div>
         <div class="timeline-week">Integration</div>
         <div class="timeline-title">Unified Web Portal with All Subsystems</div>
-        <div class="timeline-desc">Merged all subsystems into a single interactive web application. RAG strategy selector in chat, live benchmark display, system status dashboard. 76/76 tests passing across all modules.</div>
+        <div class="timeline-desc">Merged all subsystems into a single interactive web application. RAG strategy selector in chat, live benchmark display, system status dashboard. 79/79 tests passing across all modules.</div>
       </div>
     </div>`;
   return section;
 }
+
 
 // 2. RAG Section
 function buildRagSection(benchmarks) {

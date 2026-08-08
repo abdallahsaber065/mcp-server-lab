@@ -271,13 +271,127 @@ function onRoleChange() {
   fetchTenantMemories();
 }
 
+// ── Active Memory Context Card ──
+
+function renderMemoryCard(event) {
+  const hist = document.getElementById('chatHistory');
+  if (!hist) return null;
+  const facts = event.active_facts || [];
+  const episodes = event.recent_episodes || [];
+  if (facts.length === 0 && episodes.length === 0) return null;
+
+  const card = document.createElement('div');
+  card.className = 'memory-context-card';
+  card.dataset.open = 'true';
+  card.innerHTML = `
+    <div class="memory-card-header" onclick="toggleMemoryCard(this)">
+      <div class="memory-card-info">
+        <div class="memory-card-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v1a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M4 14a8 8 0 0 0 16 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+        </div>
+        <span class="memory-card-title">Active Memory Context — ${event.persona_name || 'Tenant'}</span>
+        <span class="memory-card-badge">${facts.length} Active Facts</span>
+      </div>
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="memory-card-body">
+      ${facts.length > 0 ? `
+        <div class="memory-section-title">Consolidated Semantic Facts (v1/v2 Active)</div>
+        <div class="fact-list">
+          ${facts.map(f => `
+            <div class="fact-item">
+              <span class="fact-badge">[${f.category.toUpperCase()}]</span>
+              <span class="fact-val">${f.value}</span>
+              <span class="fact-ver">v${f.version}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${episodes.length > 0 ? `
+        <div class="memory-section-title" style="margin-top:10px;">Recent Episodic Store Events</div>
+        <div class="episode-list">
+          ${episodes.map(e => `
+            <div class="episode-item">
+              <span class="episode-date">${e.timestamp || '2026-02-15'}</span>
+              <span class="episode-text">${e.summary}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>`;
+  hist.appendChild(card);
+  hist.scrollTop = hist.scrollHeight;
+  return card;
+}
+
+function toggleMemoryCard(header) {
+  const card = header.closest('.memory-context-card');
+  const isOpen = card.dataset.open === 'true';
+  card.dataset.open = isOpen ? 'false' : 'true';
+  const body = card.querySelector('.memory-card-body');
+  const icon = card.querySelector('.toggle-icon');
+  if (isOpen) {
+    body.style.display = 'none';
+    icon.innerHTML = '&#9654;';
+  } else {
+    body.style.display = 'block';
+    icon.innerHTML = '&#9660;';
+  }
+}
+
+// ── Self-RAG Verification Badge ──
+
+function renderSelfRagBadge(event) {
+  const hist = document.getElementById('chatHistory');
+  if (!hist) return;
+  const isSupported = event.is_supported === 'fully_supported';
+  const badge = document.createElement('div');
+  badge.className = `self-rag-badge ${isSupported ? 'supported' : 'warning'}`;
+  
+  if (isSupported) {
+    badge.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      <span>Self-RAG Verified: Grounded in Retrieved Policy</span>
+      <span class="badge-tag">[IsRel: ${event.is_relevant}]</span>
+      <span class="badge-tag">[IsSup: ${event.is_supported}]</span>
+    `;
+  } else {
+    badge.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>Self-RAG Advisory: Unverified Statute Claims</span>
+      <span class="badge-tag">[IsRel: ${event.is_relevant}]</span>
+      <span class="badge-tag">[IsSup: ${event.is_supported}]</span>
+    `;
+  }
+  hist.appendChild(badge);
+  hist.scrollTop = hist.scrollHeight;
+}
+
 // ── Memories ──
 
 async function fetchTenantMemories() {
   const role = document.getElementById('roleSelect')?.value || 'tenant';
   const p = currentPersonas[role] || { tenant_id: 1, name: 'Amr Hassan' };
-  // Memory endpoint placeholder — will be wired when Nour's memory/ is ready
+  const container = document.getElementById('memoryList');
+  if (!container) return;
+  try {
+    const res = await fetch(`/api/memory/${p.tenant_id}`);
+    const data = await res.json();
+    if (data.memories && data.memories.length > 0) {
+      container.innerHTML = data.memories.map(m => `
+        <div style="margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px;">
+          <span style="color:var(--green); font-weight:600;">[${(m.category || 'fact').toUpperCase()}]</span> ${m.event_summary}
+        </div>
+      `).join('');
+    } else {
+      container.innerHTML = `<i>No recorded memories for ${p.name}.</i>`;
+    }
+  } catch (e) {
+    container.innerHTML = '<span style="color:var(--red);">Failed to load memory context.</span>';
+  }
 }
+
+
 
 // ── SSE Stream Chat ──
 
@@ -349,7 +463,9 @@ async function sendChatMessageStream() {
         try {
           const event = JSON.parse(dataStr);
 
-          if (event.type === 'tool_call') {
+          if (event.type === 'memory_context') {
+            renderMemoryCard(event);
+          } else if (event.type === 'tool_call') {
             if (thinkingEl) thinkingEl.style.display = 'none';
             bubble = null; fullText = '';
             renderToolCard(event.tool, event.args, event.result);
@@ -362,17 +478,21 @@ async function sendChatMessageStream() {
             else bubble.classList.remove('dir-ltr');
             bubble.innerHTML = fullText;
             document.getElementById('chatHistory').scrollTop = 999999;
+          } else if (event.type === 'self_rag_verification') {
+            renderSelfRagBadge(event);
           } else if (event.type === 'elicitation_required') {
             renderElicitation(event.payload);
           } else if (event.type === 'fallback') {
             if (!bubble) bubble = renderMessage('assistant', '');
             bubble.innerHTML = event.content;
           }
+
         } catch (e) { console.error('SSE parse error:', e); }
       }
     }
 
     const sessions = await (await fetch('/api/chats')).json();
+
     renderSessionList(sessions);
   } catch (e) {
     if (thinkingEl) thinkingEl.style.display = 'none';
