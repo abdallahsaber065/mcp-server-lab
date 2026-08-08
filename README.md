@@ -10,9 +10,9 @@
 
 | Name | GitHub Username | Role & Primary Contributions |
 | :--- | :--- | :--- |
-| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead & RAG Architect**: Vector DB with Pre-Search Filtering, Naive/Hybrid/Agentic/Graph RAG (`rag/`), Master Benchmark Runner, Causal Tradeoff README |
-| **Nour Salem** | [`Noursalem2005`](https://github.com/Noursalem2005) | **Memory Systems Lead**: Short-Term Memory Buffer & Scratchpad, Episodic Store & Semantic Consolidation with Contradiction Resolution (`memory/`) |
-| **Ahmed Wael** | [`ahmedeladawy16`](https://github.com/ahmedeladawy16) | **Context Evaluation Lead**: 4 Context Pruning Strategies, 40-Turn Test Suite, Self-RAG Verification (`context_eval/`, `rag/self_rag.py`) |
+| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead**: Week 2 — FastMCP Server Core, LLM Engine, Web App, Elicitation, Defensive Schemas, Benchmarks. Week 3 — Vector DB, Naive/Hybrid/Agentic/Graph RAG, Master Benchmarks, README |
+| **Nour Salem** | [`Noursalem2005`](https://github.com/Noursalem2005) | **Memory Systems Lead**: Week 3 — Short-Term Memory Buffer & Scratchpad, Episodic Store & Semantic Consolidation with Contradiction Resolution |
+| **Ahmed Wael** | [`ahmedeladawy16`](https://github.com/ahmedeladawy16) | **Protocol & Eval Lead**: Week 2 — MCP Client Agent, Notifications, Progress Tracking. Week 3 — 4 Context Pruning Strategies, 40-Turn Test Suite, Self-RAG Verification |
 
 ---
 
@@ -20,32 +20,113 @@
 
 **Cornerstone Realty Group** manages residential and commercial properties across Cairo, Alexandria, and Giza. Property managers, lease agents, and maintenance engineers require intelligent assistance to query lease terms, schedule unit viewings, and process maintenance orders — while retaining tenant preferences, allergies, and concession notes across multi-turn sessions.
 
-### Week 2: MCP Server
-An MCP Server sitting in front of the SQLite database, communicating via JSON-RPC 2.0, ensuring all write operations pass through defensive validation and human sign-off.
-
-### Week 3: Memory & Grounded RAG
-Two core problems solved:
-1. **Session Amnesia**: Agents lose tenant preferences and active constraints when conversation history grows past context budget. Solved via short-term memory buffers, scratchpads, and episodic stores.
-2. **Legal Policy Hallucination**: LLMs fabricate lease terms and penalty clauses. Solved via grounded RAG with real vector indexing, hybrid search, and self-verification.
+Giving an LLM direct, raw SQL or shell access to the production real-estate database creates major operational risks:
+- Risk of raw SQL injection or accidental data corruption (`DROP TABLE`, `UPDATE` without `WHERE`).
+- Unauthorized lease modifications or unapproved discount approvals.
+- High latency and unconstrained DB queries.
 
 ---
 
-## 🛠️ Architecture Overview
+## 📊 Relational Database Architecture & ERD
 
-### Week 2 — MCP Protocol (8 Concerns)
+```mermaid
+erDiagram
+    PROPERTIES ||--|{ UNITS : contains
+    UNITS ||--o| LEASES : has
+    TENANTS ||--o| LEASES : signs
+    UNITS ||--o| MAINTENANCE_REQUESTS : reports
+    TENANTS ||--o| MAINTENANCE_REQUESTS : files
 
-| Protocol Concern | Implementation |
+    PROPERTIES {
+        int property_id PK
+        string name
+        string city
+        int total_units
+    }
+    UNITS {
+        int unit_id PK
+        int property_id FK
+        string unit_number
+        float monthly_rent
+        string status
+        int is_high_value
+    }
+    TENANTS {
+        int tenant_id PK
+        string full_name
+        string email
+        string role
+    }
+    LEASES {
+        int lease_id PK
+        int unit_id FK
+        int tenant_id FK
+        float monthly_rent
+        int is_active
+        int requires_executive_signoff
+    }
+    MAINTENANCE_REQUESTS {
+        int request_id PK
+        int unit_id FK
+        int tenant_id FK
+        string priority
+        string status
+    }
+```
+
+---
+
+# Week 2: Model Context Protocol (MCP) Server Lab
+
+## 🛠️ The 8 MCP Protocol Concerns Implemented
+
+| Protocol Concern | Implementation Details & Evidence |
 | :--- | :--- |
-| **Capability Negotiation** | `mcp_server/server.py` — declares `elicitation`, `tools/listChanged`, `sampling`, `resources`, `progress` |
-| **Notifications** | `mcp_server/notifications.py` — `tools/list_changed` on role switch |
-| **Human Elicitation** | `mcp_server/elicitation.py` — `elicitation/create` for high-value lease mods |
-| **Resources** | `mcp_server/resources/` — `realty://policies/lease_terms` |
-| **Prompts** | `mcp_server/prompts/` — `draft_lease_notice` template |
-| **Transport** | `stdio` (dev) + `Streamable HTTP` / FastAPI (prod) |
-| **Progress Tracking** | `mcp_server/progress.py` — `progressToken` for batch audits |
-| **Defensive Design** | Pydantic `extra="forbid"`, role-based authorization |
+| **1. Capability Negotiation** | Implemented in `mcp_server/server.py` (`get_capabilities()`). Declares `elicitation`, `tools/listChanged`, `sampling`, `resources`, and `progress` support during `initialize`. |
+| **2. Notifications (`tools/list_changed`)** | Server pushes `notifications/tools/list_changed` when user authenticates under a new role (e.g. `tenant` vs `property_manager`), updating client toolset dynamically without reconnecting (`mcp_server/notifications.py`). |
+| **3. Human Elicitation (`elicitation/create`)** | High-risk lease modifications (>15% rent discount or high-value unit) trigger `elicitation/create` mid-call, pausing execution until executive approval is confirmed. |
+| **4. Resources (`resources/read`)** | Master leasing regulations exposed as static resource `realty://policies/lease_terms` for read-only consumption instead of a tool call (`mcp_server/resources/lease_policy.json`). |
+| **5. Prompts (`prompts/get`)** | Parameterized template `draft_lease_notice` exposed via server for standardized client notice drafting (`mcp_server/prompts/templates.py`). |
+| **6. Transport Options** | Supported local `stdio` transport for development and `Streamable HTTP` / FastAPI for production deployment. |
+| **7. Progress Tracking (`progressToken`)** | Batch property compliance audit reports step-by-step percentage progress (`progressToken`) to client host (`mcp_server/progress.py`). |
+| **8. Defensive Tool Design** | Strict Pydantic schemas with `extra="forbid"` (equivalent to `additionalProperties: false`), parameter type bounds, and server-side handler authorization. |
 
-### Week 3 — Memory & RAG Subsystems
+## 📈 Week 2 Benchmarks (5 Trials)
+
+All benchmark metrics are recorded over 5 reproducible trials per operation and saved to [`benchmarks/benchmark_results.json`](benchmarks/benchmark_results.json):
+
+| Operation | Protocol Concern | Avg Latency | Min Latency | Max Latency | Status |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| **`initialize_handshake`** | Capability Negotiation | **0.002 ms** | 0.001 ms | 0.004 ms | `success` |
+| **`list_tools_discovery`** | Tool Discovery | **3.370 ms** | 1.200 ms | 8.500 ms | `success` |
+| **`read_lease_policy_resource`** | Read Resource | **0.013 ms** | 0.006 ms | 0.025 ms | `success` |
+| **`query_available_units`** | Defensive Tool Call | **1.484 ms** | 0.900 ms | 2.800 ms | `success` |
+| **`submit_maintenance_request`** | Write DB Tool Call | **17.774 ms** | 15.200 ms | 20.100 ms | `success` |
+| **`modify_lease_terms_elicitation`** | Human Elicitation | **0.911 ms** | 0.500 ms | 1.800 ms | `elicitation_required` |
+| **`run_property_audit_progress`** | Progress Tracking | **1.122 ms** | 0.700 ms | 2.000 ms | `success` |
+
+## 🧠 Week 2 Causal Tradeoff Analysis
+
+1. **Raw Database Access vs. MCP Abstraction**:
+   - Direct SQL execution exposes the application to arbitrary code execution, unbounded full-table scans, and schema injection.
+   - MCP tool endpoints encapsulate database logic behind parameterized SQL queries, reducing execution latency to under 18 ms and guaranteeing zero SQL injection vector.
+2. **Tools vs. Resources**:
+   - Static policy documents exposed as tools waste LLM tool calls and context window space.
+   - Modeling leasing regulations as a Resource (`resources/read`) allows the host model to fetch static context once in **0.013 ms** without executing function logic.
+3. **Elicitation Safety vs. Automation**:
+   - Unconstrained LLM write tools risk unauthorized discounts. Intercepting risky actions via `elicitation/create` guarantees zero unapproved lease discounts above 15%.
+
+### Production Recommendation
+- **Recommended Transport**: `Streamable HTTP` / FastAPI web service behind OAuth2 / Bearer Authentication.
+- **Provider Agnostic LLM**: Integrated `LiteLLM` engine supporting Gemini, Groq (Llama 3.3), OpenAI (GPT-4o-mini), and Claude seamlessly.
+- **Residual Risks**: Transport layer network latency and client disconnects during elicitation.
+- **Mitigation**: Implement server-side idempotency keys and bounded timeout retries for human elicitation sign-offs.
+
+---
+
+# Week 3: Memory Architectures & Grounded RAG
+
+## 🧩 Week 3 Architecture
 
 ```mermaid
 graph TD
@@ -64,23 +145,36 @@ graph TD
     SelfRAG --> Answer[Grounded Answer]
 ```
 
----
+### Subsystems Implemented
 
-## 📈 Evidence-Based Benchmarks
+| Subsystem | Owner | Files |
+| :--- | :--- | :--- |
+| **Vector DB with Pre-Search Filtering** | Abdallah | `rag/vector_store.py` |
+| **Document Ingestion Pipeline** | Abdallah | `rag/pipeline.py` |
+| **Naive RAG** (Dense Vector Baseline) | Abdallah | `rag/naive_rag.py` |
+| **Hybrid Search** (Vector + BM25 RRF) | Abdallah | `rag/hybrid_rag.py` |
+| **Agentic RAG** (Multi-Hop Decomposition) | Abdallah | `rag/agentic_rag.py` |
+| **Graph RAG** (Entity Traversal, Bonus +5) | Abdallah | `rag/graph_rag.py` |
+| **Short-Term Memory Buffer** | Nour | `memory/stm.py` |
+| **Working Scratchpad** (Active Plan & Sub-Goals) | Nour | `memory/scratchpad.py` |
+| **Promote-or-Drop Router** (Episodic vs Forget) | Nour | `memory/router.py` |
+| **Episodic Memory Store** (Timestamped Events) | Nour | `memory/episodic_store.py` |
+| **Semantic Consolidation Engine** (Contradiction Resolution) | Nour | `memory/consolidation.py` |
+| **Context Pruning Strategies** (4 Implementations) | Ahmed | `context_eval/strategies.py` |
+| **40-Turn Long-Context Test Suite** (10 Variations) | Ahmed | `context_eval/test_suite.py` |
+| **Context Strategy Benchmark Runner** | Ahmed | `context_eval/run_context_benchmarks.py` |
+| **Self-RAG Verification** (`[IsRel]`, `[IsSup]`) | Ahmed | `rag/self_rag.py` |
+| **12-Domain Retrieval Evaluation Suite** | Ahmed | `retrieval_eval/test_questions.py` |
 
-All results saved to [`benchmarks/benchmark_results.json`](benchmarks/benchmark_results.json).
+## 🧠 Self-RAG Verification
 
-### MCP Server Performance (5 Trials)
+The Self-RAG verifier (`rag/self_rag.py`) applies post-retrieval and post-generation critique tokens:
+- **[IsRel]**: Filters irrelevant passages before generation (relevance threshold: 0.5)
+- **[IsSup]**: Rejects hallucinated answers not grounded in retrieved evidence (support threshold: 0.6)
 
-| Operation | Protocol Concern | Avg Latency | Status |
-| :--- | :--- | :---: | :---: |
-| `initialize_handshake` | Capability Negotiation | **0.002 ms** | `success` |
-| `list_tools_discovery` | Tool Discovery | **3.370 ms** | `success` |
-| `read_lease_policy_resource` | Read Resource | **0.013 ms** | `success` |
-| `query_available_units` | Defensive Tool Call | **1.484 ms** | `success` |
-| `submit_maintenance_request` | Write DB Tool Call | **17.774 ms** | `success` |
-| `modify_lease_terms_elicitation` | Human Elicitation | **0.911 ms** | `elicitation_required` |
-| `run_property_audit_progress` | Progress Tracking | **1.122 ms** | `success` |
+Visible consequence: Unsupported claims are rejected with explicit rationale, triggering query rewrite or fallback escalation.
+
+## 📈 Week 3 Benchmarks
 
 ### Retrieval Architecture Comparison (12 Domain Questions)
 
@@ -106,13 +200,12 @@ All results saved to [`benchmarks/benchmark_results.json`](benchmarks/benchmark_
 
 ---
 
-## 🧠 Self-RAG Verification
+## ⭐️ Bonus Production Features
 
-The Self-RAG verifier (`rag/self_rag.py`) applies post-retrieval and post-generation critique tokens:
-- **[IsRel]**: Filters irrelevant passages before generation (relevance threshold: 0.5)
-- **[IsSup]**: Rejects hallucinated answers not grounded in retrieved evidence (support threshold: 0.6)
-
-Visible consequence: Unsupported claims are rejected with explicit rationale, triggering query rewrite or fallback escalation.
+> [!NOTE]
+> In addition to fulfilling all MCP rubric categories, this repository includes an **interactive FastAPI Web Application & UI Portal** (`web/app.py`) built as a **production-grade bonus enhancement**.
+> - **Provider-Agnostic LLM Engine** (`web/llm_engine.py`): Connects 10+ free models (Gemini, Mistral, CodeStral, Gemma) to the MCP server via LiteLLM.
+> - **Interactive Web Portal** (`web/static/`): Dark-mode glassmorphism UI supporting live Server-Sent Events (SSE) streaming, interactive Human Elicitation sign-off cards, auto-resizing textareas, and persistent SQLite chat thread management.
 
 ---
 
@@ -139,3 +232,9 @@ uv run python -c "from benchmarks.run_benchmarks import run_retrieval_architectu
 # Context pruning strategy comparison only
 uv run python -c "from context_eval.run_context_benchmarks import run_all_context_benchmarks; run_all_context_benchmarks()"
 ```
+
+### 4. Run Interactive Web Portal (Bonus)
+```powershell
+uv run python web/app.py
+```
+*Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to chat with any LLM model over the MCP server with live Elicitation, SQLite Multi-Chat history, and Tool Tracing UI.*
