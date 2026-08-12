@@ -1,6 +1,6 @@
 import random
 
-from ..models import EnvironmentFeedback
+from .models import EnvironmentFeedback
 
 
 class Environment:
