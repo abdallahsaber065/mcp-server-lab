@@ -23,6 +23,6 @@ venv/
 Thumbs.db
 
 # Private / Internal planning & teammate instructions (Untracked)
-docs/session2_team_execution_plan.md
-docs/instructions_for_omar.md
-docs/instructions_for_ahmed.md
+docs/*team_execution_plan*.md
+docs/instructions_for_*.md
+
