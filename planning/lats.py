@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..models import EnvironmentFeedback
+from .models import EnvironmentFeedback
 from .environment import Environment
 
 

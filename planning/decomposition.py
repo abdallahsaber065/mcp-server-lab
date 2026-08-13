@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict
 
-from ..models import Plan
+from .models import Plan
 
 
 PLANNER_SYSTEM = """You are a careful task-decomposition planner.
