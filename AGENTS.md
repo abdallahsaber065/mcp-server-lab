@@ -8,6 +8,7 @@ This file (`AGENTS.md`) is the authoritative source of rules, instructions, envi
 - **Course**: Autonomous Agents & AI Systems Lab — Session 2 (MCP Server Lab)
 - **Repository**: `abdallahsaber065/mcp-server-lab`
 - **Primary Maintainer / Student**: Abdallah Saber (`abdallahsaber065`)
+- **Contributor / Planning Lead**: Nour Salem (`cds.nourkamal25012@alexu.edu.eg`)
 - **Team**: `Cornerstone Realty Group B`
 - **Target Grade**: **100/100** on both Team Deliverable (70%) and Individual Attribution (30%).
 

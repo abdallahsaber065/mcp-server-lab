@@ -1,5 +1,9 @@
-from __future__ import annotations
+"""
+Language Agent Tree Search (LATS) MCTS Framework (planning/lats.py)
+Directly adapts TA reference toolkit's 4-phase MCTS loop, LATSNode, and LATSResult.
+"""
 
+from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
@@ -12,20 +16,17 @@ from .environment import Environment
 
 class LATSAction(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
     action: str = Field(min_length=2)
     state: str = Field(min_length=2)
 
 
 class LATSActionBatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     actions: list[LATSAction] = Field(min_length=1, max_length=3)
 
 
 class ValueEstimate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     score: float = Field(ge=0.0, le=1.0)
 
 
@@ -103,60 +104,48 @@ def lats(
         leaf = _select_leaf(root, exploration_weight)
         lessons = _trajectory_reflections(leaf)
         lesson_text = "\n".join(f"- {item}" for item in lessons[-4:]) or "- None yet."
+        
         proposed = llm.with_structured_output(
             LATSActionBatch,
             method="json_schema",
         ).invoke([
             ("system", "You are the action generator in LATS."),
-            ("human", f"""Task: {task}
-Current trajectory/state:
-{leaf.state}
-Reflections learned from failed branches:
-{lesson_text}
-
-Propose exactly {n_actions} distinct complete candidate solution(s). Each state must
-contain the fully written solution, not a placeholder or description of a solution.""",
-            ),
+            ("human", f"""Task: {task}\nCurrent trajectory/state:\n{leaf.state}\nReflections learned from failed branches:\n{lesson_text}\n\nPropose exactly {n_actions} distinct complete candidate solution(s)."""),
         ], temperature=0.5)
+        
         for item in proposed.actions[:n_actions]:
             child = LATSNode(state=item.state.strip(), action=item.action, parent=leaf)
             leaf.children.append(child)
             feedback = environment.evaluate(child.state)
             child.feedback = feedback
             child.environment_score = feedback.score
+            
             value_judgment = llm.with_structured_output(
                 ValueEstimate,
                 method="json_schema",
             ).invoke([
                 ("system", "You are the LATS value function."),
-                ("human", f"""Task: {task}
-Candidate state:
-{child.state}
-External score: {feedback.score}
-External feedback: {feedback.details}
-Estimate the candidate's future usefulness."""),
+                ("human", f"""Task: {task}\nCandidate state:\n{child.state}\nExternal score: {feedback.score}\nExternal feedback: {feedback.details}\nEstimate future usefulness."""),
             ], temperature=0.1)
+            
             child.model_score = value_judgment.score
             combined_value = 0.75 * child.environment_score + 0.25 * child.model_score
+            
             if not feedback.success:
                 response = llm.invoke([
                     ("system", "Create a branch-level LATS reflection grounded in environment feedback."),
-                    ("human", f"""Task: {task}
-Action: {child.action}
-Resulting state: {child.state}
-External feedback: {feedback.details}
-Explain briefly why this branch failed and how a later expansion should change."""),
+                    ("human", f"""Task: {task}\nAction: {child.action}\nResulting state: {child.state}\nExternal feedback: {feedback.details}\nExplain briefly why this branch failed."""),
                 ], temperature=0.2)
                 reflection = response.content
-                if not isinstance(reflection, str) or not reflection.strip():
-                    raise RuntimeError("The chat model returned an empty or unsupported response")
-                reflection = reflection.strip()
-                child.reflections.append(reflection)
+                if isinstance(reflection, str) and reflection.strip():
+                    child.reflections.append(reflection.strip())
+                    
             _backpropagate(child, combined_value)
             if best is root or child.environment_score > best.environment_score:
                 best = child
             if feedback.success:
                 return LATSResult(True, child.state, child.environment_score, completed_iterations, root)
+                
     return LATSResult(False, best.state, best.environment_score, completed_iterations, root)
 
 
