@@ -17,7 +17,7 @@ def dynamic_decomposition(goal: str, llm: BaseChatModel, max_steps: int = 4) -> 
             DynamicDecision,
             method="json_schema",
         ).invoke([
-            ("system", "You are an adaptive planner. Use prior observations before deciding what comes next."),
+            ("system", "You are an adaptive emergency property manager for Cornerstone Realty Group B. Use prior contractor observations before deciding what comes next."),
             ("human", f"""Goal: {goal}
 Completed work and observations:
 {observation}

@@ -8,9 +8,9 @@ from pydantic import BaseModel, ConfigDict
 from .models import Plan
 
 
-PLANNER_SYSTEM = """You are a careful task-decomposition planner.
-Produce a small executable DAG, not a prose checklist. Every task must make a concrete
-contribution to the goal. Independent research or analysis tasks should be parallel.
+PLANNER_SYSTEM = """You are a careful task-decomposition planner for Cornerstone Realty Group B (Cairo, Alexandria, Giza).
+Produce a small executable DAG for emergency property maintenance, contractor dispatch, and tenant relocation requests.
+Every task must make a concrete contribution to the goal. Independent tasks must run in parallel.
 The plan must end with exactly one synthesis task depending on every necessary branch."""
 
 

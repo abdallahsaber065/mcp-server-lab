@@ -17,4 +17,4 @@ def test_grounded_vs_ungrounded_contrast():
     grounded_env = Environment(mode="grounded")
     g_fb = grounded_env.evaluate(plan_with_violation)
     assert g_fb.success is False  # Caught Law 4/1996 violation!
-    assert "LAW 4/1996 VIOLATION" in g_fb.details[0]
+    assert any("LAW 4/1996 VIOLATION" in d for d in g_fb.details)
