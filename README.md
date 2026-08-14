@@ -10,9 +10,9 @@
 
 | Name | GitHub Username | Role & Primary Contributions |
 | :--- | :--- | :--- |
-| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead**: Week 2 — FastMCP Server Core, LLM Engine, Web App, Elicitation, Defensive Schemas, Benchmarks. Week 3 — Vector DB, Naive/Hybrid/Agentic/Graph RAG, Master Benchmarks, README |
-| **Nour Salem** | [`Noursalem2005`](https://github.com/Noursalem2005) | **Memory Systems Lead**: Week 3 — Short-Term Memory Buffer & Scratchpad, Episodic Store & Semantic Consolidation with Contradiction Resolution |
-| **Ahmed Wael** | [`ahmedeladawy16`](https://github.com/ahmedeladawy16) | **Protocol & Eval Lead**: Week 2 — MCP Client Agent, Notifications, Progress Tracking. Week 3 — 4 Context Pruning Strategies, 40-Turn Test Suite, Self-RAG Verification |
+| **Abdallah Saber** | [`abdallahsaber065`](https://github.com/abdallahsaber065) | **Team Lead & Architect**: Week 2 — FastMCP Server Core, LLM Engine, Elicitation, Defensive Schemas, Benchmarks. Week 3 — Vector DB, Naive/Hybrid/Agentic/Graph RAG, Master Benchmarks. Week 4 — DAG Task Decomposition Engine, Dynamic Interleaved Planner, `PlanningAgent` Loop, Trace Logging, README |
+| **Nour Salem** | [`Noursalem2005`](https://github.com/Noursalem2005) | **Memory & Planning Algorithms Lead**: Week 3 — Short-Term Memory Buffer & Scratchpad, Episodic Store & Semantic Consolidation. Week 4 — Plan-and-Solve, Tree of Thoughts Search, LATS MCTS Framework |
+| **Ahmed Wael** | [`ahmedeladawy16`](https://github.com/ahmedeladawy16) | **Eval & Self-Correction Lead**: Week 2 — MCP Client Agent, Notifications, Progress Tracking. Week 3 — 4 Context Pruning Strategies, 40-Turn Test Suite, Self-RAG Verification. Week 4 — Grounded EnvironmentFeedback, Self-Refine, Reflexion Engine, Evaluation Harness |
 
 ---
 
@@ -200,7 +200,81 @@ Visible consequence: Unsupported claims are rejected with explicit rationale, tr
 
 ---
 
-## ⭐️ Bonus Production Features
+## 🧩 Week 4: Decomposition & Planning Lab Architecture
+
+This week we stand up a dedicated **`PlanningAgent`** (`agent/planning_agent.py`) built on top of the reference toolkit [`AmrSheta22/task_decomposition_and_planning`](https://github.com/AmrSheta22/task_decomposition_and_planning) (`planning/` directory). The agent reuses our existing `mcp_server/` tools and relational database (`db/schema.sql`) **without modifying or duplicating Week 1-3 memory/RAG code paths**.
+
+### Real Enterprise Scenario: Nile Tower Cairo Emergency Repair & Tenant Relocation
+- **Incident**: Plumbing riser burst at **Nile Tower Cairo** affecting 6 residential units and 2 commercial units simultaneously.
+- **Why this requires a Planning Agent**:
+  - **High Branching**: Multiple valid contractor-unit assignment permutations, relocation schedule options, and tenant concession/deposit escrow adjustments.
+  - **High Cost of Wrong Plan**: Miscalculating Egyptian Tenancy Law 4/1996 emergency repair SLAs (Clause 8.1c) or double-booking licensed emergency plumbers results in legal penalties and tenant lawsuits (\$10k+ cost).
+  - **Dynamic Failure-Prone Steps**: Contractors may turn out unavailable mid-execution or tenants may reject initial relocation slots, requiring dynamic/interleaved re-planning rather than executing a static plan.
+
+```mermaid
+graph TD
+    UserReq["User Request: Emergency Nile Tower Repair & Relocation"] --> Agent["PlanningAgent (agent/planning_agent.py)"]
+    Agent --> DecompRouter{"Decomposition Method"}
+    DecompRouter -->|Static Flow| DecompFirst["Decomposition-First (planning/decomposition.py)<br>NetworkX Acyclicity & Topo Sort"]
+    DecompRouter -->|Dynamic Observation| DynamicDecomp["Dynamic Decomposition (planning/dynamic_decomposition.py)<br>Interleaved Re-planning"]
+    
+    DecompFirst --> SubTaskRouter{"Sub-task Routing Engine"}
+    DynamicDecomp --> SubTaskRouter
+    
+    SubTaskRouter -->|Deterministic / Simple| PS["Plan-and-Solve (planning/plan_and_solve.py)<br>Single-Pass Execution"]
+    SubTaskRouter -->|Multi-Option Reasoning| ToT["Tree of Thoughts (planning/tree_of_thoughts.py)<br>Candidate Evaluation & Beam Search"]
+    SubTaskRouter -->|Complex / High-Risk| LATS["LATS MCTS Loop (planning/lats.py)<br>Select -> Expand -> Simulate -> Reflect"]
+    
+    PS --> SelfRefine["Self-Refine (planning/self_refine.py)<br>Draft -> Rubric Critique -> Revision"]
+    ToT --> SelfRefine
+    LATS --> GroundedEnv["Grounded EnvironmentFeedback (planning/environment.py)<br>DB Validator & Egyptian Law 4/1996 SLA Check"]
+    
+    GroundedEnv -->|Failure Detected| Reflexion["Reflexion Engine (planning/reflexion.py)<br>Episodic Reflection Buffer Across Trials"]
+    Reflexion --> LATS
+    SelfRefine --> Output["Verified Final Execution Plan & MCP Tool Calls"]
+    GroundedEnv -->|Pass| Output
+```
+
+---
+
+### Sub-Task Routing Policy & Justification Matrix
+
+| Sub-task Shape | Routed Algorithm | Rationale & Justification |
+| :--- | :--- | :--- |
+| **Vendor Priority Ranking** | **Tree of Thoughts (ToT)** | Generates distinct candidate vendor assignments, evaluates scores across beam search width, and prunes weak candidates before committing. |
+| **Emergency Relocation & Legal SLA** | **Language Agent Tree Search (LATS)** | High-risk step where wrong relocation violates Law 4/1996 4-hour SLA. MCTS loop uses external `GroundedEnvironment` feedback and branch reflections. |
+| **Budget Line Item Computation** | **Plan-and-Solve (PS)** | Simple deterministic task where single-pass plan-and-solve prompting achieves 100% success at minimum latency (\$0.01/run). |
+
+---
+
+### Grounded vs. Ungrounded Critique Comparison Case
+
+- **Ungrounded Self-Critique**: When evaluated by LLM self-confidence alone (`Environment(mode="ungrounded")`), an invalid emergency plan with a 24-hour plumbing dispatch was rated **0.90 (Pass)** because the text sounded visually complete and polished.
+- **Grounded `EnvironmentFeedback`**: Our grounded evaluator (`Environment(mode="grounded")`) checks DB scheduling tables and Egyptian Law 4/1996 Clause 8.1c. It caught the violation (**Score: 0.10, Failed**):
+  > `LAW 4/1996 VIOLATION: Clause 8.1c requires emergency plumbing dispatch within 4 hours.`
+  This failure triggered Reflexion multi-trial retry, carrying the verbal reflection into trial 2 to fix the dispatch window.
+
+---
+
+### Master Planning Benchmark Results (`planning_eval/results.json`)
+
+| Sub-task / Concern | Planning Method | Task Success Rate | Avg LLM Calls | Avg Tokens | Latency (s) | Est. Cost ($) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| Top-level Request | Decomposition-first | 14/20 (70%) | 1 plan + 4 nodes | 6,200 | 3.2s | \$0.04 |
+| Top-level Request | **Dynamic decomposition** | **18/20 (90%)** | ~7 (varies) | 8,900 | 5.1s | \$0.06 |
+| Task 1: Vendor Ranking | Plan-and-Solve | 12/20 (60%) | 1 | 1,500 | 0.9s | \$0.01 |
+| Task 1: Vendor Ranking | **Tree of Thoughts (ToT)** | **17/20 (85%)** | 8 | 5,400 | 3.6s | \$0.04 |
+| Task 2: Relocation Plan | LATS (Ungrounded Env) | 10/20 (50%) | 10 | 7,400 | 5.8s | \$0.05 |
+| Task 2: Relocation Plan | **LATS (Grounded Env)** | **18/20 (90%)** | 12 | 8,200 | 6.5s | \$0.07 |
+| Sub-task Revision | Self-Refine (Rubric) | 15/20 (75%) | 3 | 3,100 | 2.4s | \$0.02 |
+| Sub-task Revision | **Reflexion (Episodic)** | **19/20 (95%)** | 6 | 6,800 | 4.8s | \$0.05 |
+
+**Causal Tradeoff Analysis**:
+1. **Dynamic Decomposition vs Decomposition-First**: Dynamic decomposition achieves 90% success (vs 70%) specifically because real contractor assignments encounter mid-plan unavailability. Dynamic decomposition re-shapes the plan upon observing step 1 failure, whereas static decomposition-first blindly executes a stale plan.
+2. **Grounded LATS vs Ungrounded LATS**: Ungrounded LATS achieves only 50% success despite 10 LLM calls because LLM self-score rewards confident phrasing over DB reality. Grounded LATS achieves 90% success by rejecting double-booked slots and SLA breaches.
+3. **Reflexion vs Self-Refine**: Reflexion achieves 95% success (vs 75%) because carrying verbal reflections in a capped episodic buffer across 3 trials allows the agent to learn from prior mistakes, whereas single-draft Self-Refine fails on complex multi-constraint violations.
+
+---
 
 > [!NOTE]
 > In addition to fulfilling all MCP rubric categories, this repository includes an **interactive FastAPI Web Application & UI Portal** (`web/app.py`) built as a **production-grade bonus enhancement**.
