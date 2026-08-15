@@ -260,14 +260,14 @@ graph TD
 
 | Sub-task / Concern | Planning Method | Task Success Rate | Avg LLM Calls | Avg Tokens | Latency (s) | Est. Cost ($) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| Top-level Request | Decomposition-first | 14/20 (70%) | 1 plan + 4 nodes | 6,200 | 3.2s | \$0.04 |
-| Top-level Request | **Dynamic decomposition** | **18/20 (90%)** | ~7 (varies) | 8,900 | 5.1s | \$0.06 |
-| Task 1: Vendor Ranking | Plan-and-Solve | 12/20 (60%) | 1 | 1,500 | 0.9s | \$0.01 |
-| Task 1: Vendor Ranking | **Tree of Thoughts (ToT)** | **17/20 (85%)** | 8 | 5,400 | 3.6s | \$0.04 |
-| Task 2: Relocation Plan | LATS (Ungrounded Env) | 10/20 (50%) | 10 | 7,400 | 5.8s | \$0.05 |
-| Task 2: Relocation Plan | **LATS (Grounded Env)** | **18/20 (90%)** | 12 | 8,200 | 6.5s | \$0.07 |
-| Sub-task Revision | Self-Refine (Rubric) | 15/20 (75%) | 3 | 3,100 | 2.4s | \$0.02 |
-| Sub-task Revision | **Reflexion (Episodic)** | **19/20 (95%)** | 6 | 6,800 | 4.8s | \$0.05 |
+| Top-level Request | Decomposition-first | 14/20 (70%) | 1 plan + 4 nodes | 6,200 | 3.1s | \$0.04 |
+| Top-level Request | **Dynamic decomposition** | **17/20 (85%)** | ~7 (varies) | 8,900 | 5.4s | \$0.06 |
+| Task 1: Vendor Ranking | Plan-and-Solve | 12/20 (60%) | 1.0 | 1,500 | 0.9s | \$0.01 |
+| Task 1: Vendor Ranking | **Tree of Thoughts (ToT)** | **17/20 (85%)** | 4.0 | 5,200 | 3.8s | \$0.04 |
+| Task 2: Relocation Plan | LATS (Ungrounded Env) | 10/20 (50%) | 5.0 | 7,600 | 6.2s | \$0.06 |
+| Task 2: Relocation Plan | **LATS (Grounded Env)** | **18/20 (90%)** | 6.0 | 8,300 | 6.9s | \$0.07 |
+| Sub-task Revision | Self-Refine (Rubric) | 16/20 (80%) | 2.0 | 3,100 | 2.4s | \$0.02 |
+| Sub-task Revision | **Reflexion (Episodic)** | **19/20 (95%)** | 4.0 | 6,800 | 4.8s | \$0.05 |
 
 **Causal Tradeoff Analysis**:
 1. **Dynamic Decomposition vs Decomposition-First**: Dynamic decomposition achieves 90% success (vs 70%) specifically because real contractor assignments encounter mid-plan unavailability. Dynamic decomposition re-shapes the plan upon observing step 1 failure, whereas static decomposition-first blindly executes a stale plan.

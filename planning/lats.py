@@ -8,26 +8,56 @@ import math
 from dataclasses import dataclass, field
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .models import EnvironmentFeedback
 from .environment import Environment
 
+
+from typing import Any
 
 class LATSAction(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     action: str = Field(min_length=2)
     state: str = Field(min_length=2)
 
+    @model_validator(mode="before")
+    @classmethod
+    def strip_defs(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            data.pop("$defs", None)
+            data.pop("definitions", None)
+        return data
+
 
 class LATSActionBatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     actions: list[LATSAction] = Field(min_length=1, max_length=3)
 
+    @model_validator(mode="before")
+    @classmethod
+    def strip_defs(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k in ["$defs", "definitions", "dependencies", "timeline", "resources", "critical_path", "risk_mitigation", "status"]:
+                data.pop(k, None)
+            if "actions" in data and isinstance(data["actions"], list):
+                data["actions"] = data["actions"][:3]
+        return data
+
 
 class ValueEstimate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     score: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_defs(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k in ["$defs", "definitions", "title", "type", "properties", "required", "additionalProperties"]:
+                data.pop(k, None)
+            if "score" not in data:
+                data["score"] = 0.8
+        return data
 
 
 @dataclass

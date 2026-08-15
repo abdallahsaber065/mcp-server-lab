@@ -1,5 +1,6 @@
+from typing import Any
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class DynamicDecision(BaseModel):
@@ -7,6 +8,14 @@ class DynamicDecision(BaseModel):
 
     done: bool
     next_task: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_defs(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            data.pop("$defs", None)
+            data.pop("definitions", None)
+        return data
 
 
 def dynamic_decomposition(goal: str, llm: BaseChatModel, max_steps: int = 4) -> list[tuple[str, str]]:

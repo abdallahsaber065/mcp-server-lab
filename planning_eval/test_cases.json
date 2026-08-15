@@ -1,0 +1,162 @@
+[
+  {
+    "id": "TC-01",
+    "category": "emergency_disaster",
+    "request": "Plumbing riser burst at Nile Tower Cairo affecting 6 residential units and 2 commercial units. Re-plan emergency contractor dispatch schedules under Egyptian Law 4/1996 4-hour emergency SLAs, evaluate vendor priority options, and draft temporary tenant relocation plans.",
+    "expected_ideal_method": "dynamic_lats",
+    "requires_lookahead": true,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-02",
+    "category": "emergency_disaster",
+    "request": "Electrical transformer explosion at Zamalek Royal Suites cutting power to 4 luxury suites. Coordinate emergency generator dispatch, verify structural safety clearances, and arrange 72-hour hotel vouchers for affected tenants.",
+    "expected_ideal_method": "dynamic_lats",
+    "requires_lookahead": true,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-03",
+    "category": "emergency_disaster",
+    "request": "Main HVAC riser failure at Giza Commercial Center during peak summer heat affecting 8 office suites. Re-schedule emergency cooling technicians, compute tenant downtime penalties under Clause 5.2, and arrange temporary portable AC units.",
+    "expected_ideal_method": "dynamic_lats",
+    "requires_lookahead": true,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-04",
+    "category": "emergency_disaster",
+    "request": "Sewage backup flooding basement parking B1 at Cornerstone Heights. Dispatch hazardous water extraction crews, audit EV charging station isolations, and issue emergency parking reallocation notices.",
+    "expected_ideal_method": "dynamic_lats",
+    "requires_lookahead": true,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-05",
+    "category": "emergency_disaster",
+    "request": "Roof water seepage following severe rainfall at Gleem Bay Residence affecting top-floor Penthouse G-301. Mobilize waterproofing contractors, conduct moisture mapping, and calculate temporary rent abatement under Egyptian Law 4/1996.",
+    "expected_ideal_method": "dynamic_lats",
+    "requires_lookahead": true,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-06",
+    "category": "statutory_compliance",
+    "request": "Run a comprehensive building habitability compliance audit for Alexandria Beachfront Towers, rank high-priority repair liabilities, and verify emergency exit compliance under Law 4/1996.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-07",
+    "category": "statutory_compliance",
+    "request": "Audit Cornerstone Heights for elevator safety certification compliance, evaluate 3 elevator maintenance vendor service plans, and generate a compliance roadmap.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-08",
+    "category": "statutory_compliance",
+    "request": "Inspect Zamalek Royal Suites for fire suppression system compliance under Cairo Municipal Code 2024, rank non-compliant zone hazards, and propose remediation milestones.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-09",
+    "category": "statutory_compliance",
+    "request": "Audit Giza Commercial Center for commercial zoning noise ordinance adherence, evaluate tenant acoustic insulation options, and draft compliance guidelines.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-10",
+    "category": "statutory_compliance",
+    "request": "Perform a structural humidity and coastal salt-corrosion audit at Gleem Bay Residence, rank structural maintenance priorities, and outline 5-year preventative maintenance steps.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-11",
+    "category": "vendor_tradeoff",
+    "request": "Evaluate 3 contractor proposals for facade repainting at Cornerstone Heights: compare Cairo Painters (150k EGP, 10 days), Delta Renovations (180k EGP, 5 days), and Pyramids Coatings (130k EGP, 14 days), and recommend the optimal choice.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-12",
+    "category": "vendor_tradeoff",
+    "request": "Compare 4 partner hotel options for displaced tenant emergency accommodation in Zamalek: Royal Hotel (3,000 EGP/night, 2 mins away), Nile Plaza Suites (2,500 EGP/night, 5 mins away), Maadi Inn (1,800 EGP/night, 25 mins away), and Cairo Central (2,000 EGP/night, 15 mins away).",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-13",
+    "category": "vendor_tradeoff",
+    "request": "Rank 3 security contractor bids for 24/7 CCTV and access control installation at Giza Commercial Center based on cost, SLA guarantee, and equipment warranty.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-14",
+    "category": "vendor_tradeoff",
+    "request": "Evaluate waste management service contracts for Gleem Bay Residence comparing Municipal Collection vs Private Eco-Recycle Services on cost, frequency, and green certification.",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-15",
+    "category": "vendor_tradeoff",
+    "request": "Compare solar panel installation bids for Cornerstone Heights roof: SolEgypt (450k EGP, 25% energy offset) vs Nile Solar (600k EGP, 40% energy offset).",
+    "expected_ideal_method": "tot",
+    "requires_lookahead": true,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-16",
+    "category": "lease_negotiation",
+    "request": "Propose a discounted lease renewal for Lease #3 at Giza Commercial Center (current rent 60,000 EGP) at 48,000 EGP/month and verify executive sign-off requirements.",
+    "expected_ideal_method": "reflexion",
+    "requires_lookahead": false,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-17",
+    "category": "lease_negotiation",
+    "request": "Draft lease renewal terms for Lease #1 (Amr Hassan, Unit A-101) with a 9,000 EGP discounted rent proposal, checking statutory 15% discount sign-off policies.",
+    "expected_ideal_method": "reflexion",
+    "requires_lookahead": false,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-18",
+    "category": "lease_negotiation",
+    "request": "Modify lease terms for Lease #5 (Yasmine Ibrahim, Royal-101) to 28,000 EGP/month rent with smart lock accessibility addendum, verifying executive sign-off thresholds.",
+    "expected_ideal_method": "reflexion",
+    "requires_lookahead": false,
+    "requires_grounding": true
+  },
+  {
+    "id": "TC-19",
+    "category": "lease_negotiation",
+    "request": "Negotiate early lease termination for Lease #2 (Noha El-Sayed, Unit B-201) with security deposit refund calculation under Clause 9.3.",
+    "expected_ideal_method": "ps",
+    "requires_lookahead": false,
+    "requires_grounding": false
+  },
+  {
+    "id": "TC-20",
+    "category": "lease_negotiation",
+    "request": "Calculate 5% rent renewal increase cap for Lease #4 (Omar Farouk, Unit A-105) and draft 12-month extension agreement.",
+    "expected_ideal_method": "ps",
+    "requires_lookahead": false,
+    "requires_grounding": false
+  }
+]

@@ -3,10 +3,10 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel, ConfigDict
+from typing import Any
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from .models import Plan
-
 
 PLANNER_SYSTEM = """You are a careful task-decomposition planner for Cornerstone Realty Group B (Cairo, Alexandria, Giza).
 Produce a small executable DAG for emergency property maintenance, contractor dispatch, and tenant relocation requests.
@@ -23,12 +23,28 @@ class PlannedTask(BaseModel):
     instruction: str
     depends_on: list[str]
 
+    @model_validator(mode="before")
+    @classmethod
+    def strip_defs(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            data.pop("$defs", None)
+            data.pop("definitions", None)
+        return data
+
 
 class GeneratedPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     goal: str
     tasks: list[PlannedTask]
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_defs(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            data.pop("$defs", None)
+            data.pop("definitions", None)
+        return data
 
 
 def decompose_goal(goal: str, llm: BaseChatModel) -> Plan:

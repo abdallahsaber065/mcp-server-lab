@@ -4,58 +4,58 @@
       "success": "14/20",
       "avg_calls": "1 plan + 4 nodes",
       "tokens": 6200,
-      "latency_s": 3.2,
+      "latency_s": 3.1,
       "cost": 0.04
     },
     "dynamic": {
-      "success": "18/20",
+      "success": "17/20",
       "avg_calls": "~7 (varies)",
       "tokens": 8900,
-      "latency_s": 5.1,
+      "latency_s": 5.4,
       "cost": 0.06
     }
   },
   "planning": {
     "Plan-and-Solve": {
       "success": "12/20",
-      "avg_calls": 1,
+      "avg_calls": 1.0,
       "tokens": 1500,
       "latency_s": 0.9,
       "cost": 0.01
     },
     "Tree of Thoughts": {
       "success": "17/20",
-      "avg_calls": 8,
-      "tokens": 5400,
-      "latency_s": 3.6,
+      "avg_calls": 4.0,
+      "tokens": 5200,
+      "latency_s": 3.8,
       "cost": 0.04
     },
     "LATS (Ungrounded)": {
       "success": "10/20",
-      "avg_calls": 10,
-      "tokens": 7400,
-      "latency_s": 5.8,
-      "cost": 0.05
+      "avg_calls": 5.0,
+      "tokens": 7600,
+      "latency_s": 6.2,
+      "cost": 0.06
     },
     "LATS (Grounded)": {
       "success": "18/20",
-      "avg_calls": 12,
-      "tokens": 8200,
-      "latency_s": 6.5,
+      "avg_calls": 6.0,
+      "tokens": 8300,
+      "latency_s": 6.9,
       "cost": 0.07
     }
   },
   "self_correction": {
     "Self-Refine": {
-      "success": "15/20",
-      "avg_calls": 3,
+      "success": "16/20",
+      "avg_calls": 2.0,
       "tokens": 3100,
       "latency_s": 2.4,
       "cost": 0.02
     },
     "Reflexion": {
       "success": "19/20",
-      "avg_calls": 6,
+      "avg_calls": 4.0,
       "tokens": 6800,
       "latency_s": 4.8,
       "cost": 0.05
