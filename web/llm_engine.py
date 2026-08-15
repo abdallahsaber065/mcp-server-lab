@@ -32,14 +32,18 @@ class MCPLLMEngine:
         router_prompt = """You are an Intent Classifier for Cornerstone Realty Group B property management.
 Classify the incoming user message into either "PLANNING" or "STANDARD".
 
-Set intent to "PLANNING" if:
-- Request involves emergency repair re-scheduling, plumbing/electrical bursts, or multi-contractor coordination.
-- Request requires tenant temporary relocation planning or Egyptian Law 4/1996 SLA compliance audits.
-- Request requires multi-step DAG task decomposition, candidate ranking (Tree of Thoughts), or multi-branch verification (LATS).
+Set intent to "PLANNING" ONLY if:
+- Request involves multi-step emergency disaster repair re-scheduling (e.g., plumbing riser burst, electrical fire at Nile Tower, multi-contractor conflict resolution).
+- Request requires multi-contractor coordination, tenant temporary relocation planning logistics, or multi-step DAG task decomposition (LATS, Tree of Thoughts).
 
 Set intent to "STANDARD" for:
-- Simple property/unit/lease lookups or policy questions.
-- Single tool executions (e.g. filing a maintenance ticket, checking unit rent).
+- Database inquiries, unit lookups, property queries, and active lease checks.
+- Single MCP tool executions:
+  * Running a property compliance audit / occupancy audit (`run_property_audit`)
+  * Submitting a maintenance ticket (`submit_maintenance_request`)
+  * Modifying lease terms or rent discounts (`modify_lease_terms`)
+  * Looking up available units (`lookup_available_units`)
+- General operational questions, policy binder inquiries, or user identity questions.
 
 Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale": "<1-sentence reason>"}"""
 
@@ -113,7 +117,7 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
                 logger.warning(f"LiteLLM call failed for model {target_model}: {e}")
                 return {
                     "status": "fallback_executed",
-                    "final_answer": f"[Autonomous Engine Response]: Processed request '{user_message}'. Note: Provider API error ({str(e)}), executed defensive boundary fallback.",
+                    "final_answer": f"[Autonomous Engine Response]: Processed request '{user_message}'. Note: A temporary provider communication error occurred; executed defensive boundary fallback.",
                     "tool_calls": tool_calls_trace,
                     "llm_calls": llm_calls_count,
                     "model": target_model
@@ -309,7 +313,7 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
                 logger.warning(f"LiteLLM stream failed for model {target_model}: {e}")
                 fallback_event = json.dumps({
                     "type": "fallback",
-                    "content": f"[Autonomous Engine Response]: Processed request '{user_message}'. Note: Provider API error ({str(e)}), executed defensive boundary fallback."
+                    "content": f"[Autonomous Engine Response]: Processed request '{user_message}'. Note: A temporary provider communication error occurred; executed defensive boundary fallback."
                 }, ensure_ascii=False)
                 yield f"data: {fallback_event}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"

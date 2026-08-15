@@ -200,14 +200,24 @@ class CornerstoneMCPServer:
             elif name == "run_property_audit":
                 validated = BatchAuditArgs(**arguments)
                 
+                conn = get_db_connection()
+                cur = conn.cursor()
+                cur.execute("SELECT property_id, name FROM properties WHERE property_id = ?;", (validated.property_id,))
+                prop_row = cur.fetchone()
+                if not prop_row:
+                    conn.close()
+                    return {
+                        "status": "error",
+                        "error_type": "ToolExecutionException",
+                        "message": f"Property ID {validated.property_id} not found in property database. Please verify the property identifier."
+                    }
+
                 progress_history = []
                 for step in range(1, 6):
                     pct = step * 20
-                    msg = f"Auditing property #{validated.property_id} - Step {step}/5 ({pct}%)"
+                    msg = f"Auditing {prop_row['name']} (ID: {validated.property_id}) - Step {step}/5 ({pct}%)"
                     progress_history.append({"step": step, "percentage": pct, "message": msg})
 
-                conn = get_db_connection()
-                cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) FROM units WHERE property_id = ?;", (validated.property_id,))
                 total_u = cur.fetchone()[0]
                 cur.execute("SELECT COUNT(*) FROM units WHERE property_id = ? AND status = 'occupied';", (validated.property_id,))
@@ -217,6 +227,7 @@ class CornerstoneMCPServer:
                 return {
                     "status": "success",
                     "property_id": validated.property_id,
+                    "property_name": prop_row["name"],
                     "total_units": total_u,
                     "occupied_units": occupied_u,
                     "occupancy_rate": f"{(occupied_u / total_u * 100):.1f}%" if total_u > 0 else "0%",
@@ -227,19 +238,33 @@ class CornerstoneMCPServer:
             # moved to top-level rag/ and memory/ packages
 
             else:
-                return {"status": "error", "error_type": "UnknownTool", "message": f"Tool '{name}' is not recognized."}
+                return {"status": "error", "error_type": "UnknownTool", "message": f"Requested tool '{name}' is not recognized in current permissions."}
 
         except ValidationError as e:
             return {
                 "status": "error",
                 "error_type": "ValidationError",
+                "message": "Invalid input parameters: Please check required fields and data types.",
                 "details": e.errors()
             }
         except Exception as e:
+            err_msg = str(e)
+            if "FOREIGN KEY" in err_msg.upper():
+                clean_msg = "Invalid reference: The specified Unit ID or Tenant ID does not exist in property records."
+            elif "UNIQUE CONSTRAINT" in err_msg.upper():
+                clean_msg = "Conflict: A record with these unique identifiers already exists."
+            elif "NOT FOUND" in err_msg.upper():
+                clean_msg = err_msg
+            elif "CHECK CONSTRAINT" in err_msg.upper():
+                clean_msg = "Validation constraint failed: Input value is out of permitted range."
+            else:
+                clean_msg = err_msg.replace("sqlite3.IntegrityError: ", "").replace("sqlite3.OperationalError: ", "").strip()
+                if "sqlite" in clean_msg.lower() or "syntax" in clean_msg.lower():
+                    clean_msg = "Unable to process database query due to an invalid request format."
             return {
                 "status": "error",
                 "error_type": "ToolExecutionException",
-                "message": str(e)
+                "message": clean_msg
             }
 
     def set_user_role_and_notify(self, new_role: str) -> Dict[str, Any]:

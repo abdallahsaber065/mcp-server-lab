@@ -8,14 +8,13 @@ from langchain_core.language_models.chat_models import BaseChatModel
 
 def plan_and_solve(question: str, llm: BaseChatModel) -> str:
     """
-    Executes Plan-and-Solve single-pass prompting.
+    Executes Plan-and-Solve single-pass prompting for forward-looking operational schedules.
     """
     response = llm.invoke([
-        ("system", "You use Plan-and-Solve prompting for emergency property management. Clearly separate PLAN from SOLUTION."),
+        ("system", "You are a Strategic Planning & Scheduling Agent for emergency property management. Your task is to output a FORWARD-LOOKING OPERATIONAL PLAN, TIMELINE SCHEDULE, AND STRATEGY for the Property Manager. Do NOT report fake past timestamps or pretend unexecuted actions already occurred. Instead, output actionable future milestones, vendor priority assignments, and risk mitigations."),
         ("human", f"""{question}
 
-First understand the problem and devise a plan to solve it. Then carry out the
-plan step by step. Check calculations and common-sense assumptions."""),
+First analyze the operational requirements and devise a structured plan. Then output the forward-looking action schedule, timeline milestones, and vendor priorities step by step."""),
     ], temperature=0.2)
     
     if not isinstance(response.content, str) or not response.content.strip():

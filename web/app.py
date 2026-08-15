@@ -31,7 +31,8 @@ from memory.router import MemoryRouter
 from memory.consolidation import SemanticMemoryStore, SemanticConsolidationEngine
 from mcp_server.db_helpers import (
     create_chat_session, get_all_chat_sessions, get_chat_messages,
-    save_chat_message, delete_chat_session, get_db_connection
+    save_chat_message, delete_chat_session, get_db_connection,
+    update_chat_session_role, get_chat_session_role
 )
 
 from web.llm_engine import MCPLLMEngine, AVAILABLE_MODELS
@@ -277,12 +278,27 @@ def build_system_prompt(role: str) -> str:
         prompt += "\n"
 
     prompt += (
+        "PROPERTY & UNIT DIRECTORY:\n"
+        "- Property ID 1: Cornerstone Heights (Cairo, 12 El-Tahrir Square) — Units: A-101 (unit_id: 101), A-102 (102), Penthouse-1 (103), A-104 (104), A-201 (105)\n"
+        "- Property ID 2: Alexandria Beachfront Towers (Alexandria, 45 Corniche El-Nile) — Units: B-201 (unit_id: 201), B-202 (202), B-301 (203), Sky-Penthouse-B (204)\n"
+        "- Property ID 3: Giza Commercial & Residential Center (Giza, 88 Pyramids Road) — Units: Suite-301 (unit_id: 301), Suite-302 (302), Suite-401 (303)\n"
+        "- Property ID 4: Zamalek Royal Suites (Cairo, 24 26th of July Street) — Units: Royal-101 (unit_id: 401), Royal-Penthouse (402), Royal-201 (403)\n"
+        "- Property ID 5: Gleem Bay Residence (Alexandria, 102 El-Geish Road, Gleem) — Units: G-101 (unit_id: 501), G-201 (502), G-301 (503)\n\n"
+        "TENANT & ASSIGNED UNIT MAPPING:\n"
+        "- Tenant ID 1: Amr Hassan (amr.hassan@example.com) -> Assigned Unit ID: 101 (A-101, Cornerstone Heights)\n"
+        "- Tenant ID 2: Noha El-Sayed (noha.elsayed@example.com) -> Assigned Unit ID: 201 (B-201, Alexandria Beachfront Towers)\n"
+        "- Tenant ID 5: Omar Farouk (omar.farouk@example.com) -> Assigned Unit ID: 105 (A-201, Cornerstone Heights)\n"
+        "- Tenant ID 6: Yasmine Ibrahim (yasmine.ibrahim@example.com) -> Assigned Unit ID: 401 (Royal-101, Zamalek Royal Suites)\n"
+        "- Tenant ID 7: Khaled Abdelrahman (khaled.abdel@example.com) -> Assigned Unit ID: 402 (Royal-Penthouse, Zamalek Royal Suites)\n"
+        "- Tenant ID 8: Mariam Soliman (mariam.soliman@example.com) -> Assigned Unit ID: 502 (G-201, Gleem Bay Residence)\n\n"
         "CRITICAL MULTI-TOOL & REASONING RULES:\n"
         "1. Active consolidated tenant facts (allergies, floor preferences) and recent episodic history are already provided above in your system context.\n"
-        "2. Whenever answering a request, you MUST invoke the appropriate MCP tool(s) (lookup_available_units, submit_maintenance_request, modify_lease_terms, run_property_audit) to fetch or update real database records.\n"
-        "3. If a request requires multiple actions (e.g. searching for available units THEN checking maintenance or modifying lease terms), "
+        "2. When submitting a maintenance ticket (`submit_maintenance_request`), ALWAYS use the tenant's assigned `unit_id` (e.g. `unit_id: 101` for Tenant 1 Amr Hassan), NEVER the `property_id`.\n"
+        "3. Whenever answering a request, you MUST invoke the appropriate MCP tool(s) (lookup_available_units, submit_maintenance_request, modify_lease_terms, run_property_audit) to fetch or update real database records.\n"
+        "4. When the user requests a compliance or occupancy audit for a property (e.g. 'run Compliance & Audits for Alexandria Beachfront Towers' or 'audit property 2'), IMMEDIATELY call the `run_property_audit` tool with the corresponding `property_id`.\n"
+        "5. If a request requires multiple actions (e.g. searching for available units THEN checking maintenance or modifying lease terms), "
         "execute multiple MCP tool calls iteratively before generating your final response.\n"
-        "4. Do NOT make up unit prices, lease numbers, or maintenance statuses.\n\n"
+        "6. Do NOT make up unit prices, lease numbers, or maintenance statuses.\n\n"
         "OUTPUT FORMAT INSTRUCTIONS:\n"
         "Format your final text responses strictly using clean, semantic HTML tags without markdown codeblock wrappers (no ```html). "
         "Use <h3> for section titles, <p> for text, <ul>/<li> for lists, <strong> for emphasis, and <table>/<thead>/<tbody>/<tr>/<th>/<td> for structured tables. "
@@ -471,10 +487,19 @@ async def create_chat(req: CreateSessionRequest):
     session_data = create_chat_session(session_id=session_id, title=req.title, role=req.role)
     return session_data
 
+class UpdateSessionRoleRequest(BaseModel):
+    role: str
+
 @app.get("/api/chats/{session_id}")
 async def get_chat(session_id: str):
     messages = get_chat_messages(session_id)
-    return {"session_id": session_id, "messages": messages}
+    role = get_chat_session_role(session_id)
+    return {"session_id": session_id, "role": role, "messages": messages}
+
+@app.patch("/api/chats/{session_id}/role")
+async def update_session_role(session_id: str, req: UpdateSessionRoleRequest):
+    update_chat_session_role(session_id, req.role)
+    return {"status": "success", "session_id": session_id, "role": req.role}
 
 @app.delete("/api/chats/{session_id}")
 async def delete_chat(session_id: str):
@@ -526,7 +551,8 @@ async def chat_stream_endpoint(req: StreamChatRequest):
         elif m["type"] == "assistant" and m.get("content"):
             history_for_llm.append({"role": "assistant", "content": m["content"]})
 
-    # Save current user prompt to SQLite
+    # Save current user prompt and active persona role to SQLite
+    update_chat_session_role(req.session_id, req.role)
     save_chat_message(session_id=req.session_id, msg_type="user", content=req.user_message)
     
     # Enforce title update on first user message
@@ -780,8 +806,8 @@ async def execute_planning_agent_endpoint(req: PlanningExecuteRequest):
         logger.error(f"Planning execution error: {e}", exc_info=True)
         return {
             "status": "error",
-            "error": str(e),
-            "summary": f"Execution failed: {str(e)}"
+            "error": "The planning agent could not generate an execution plan due to a temporary service issue.",
+            "summary": "The planning agent encountered a temporary execution issue. Please check your request parameters and retry."
         }
 
 @app.get("/api/planning/benchmarks")
@@ -795,7 +821,22 @@ async def get_planning_benchmarks():
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("web.app:app", host=host, port=port)
+    
+    is_dev = "--dev" in sys.argv or "--reload" in sys.argv or os.getenv("DEV", "").lower() in ("true", "1") or os.getenv("RELOAD", "").lower() in ("true", "1")
+    
+    if is_dev:
+        print("🚀 Starting FastAPI Server in DEV (Auto-Reload) Mode with Cache Exclusions...")
+        uvicorn.run(
+            "web.app:app",
+            host=host,
+            port=port,
+            reload=True,
+            reload_excludes=[".venv", "__pycache__", "*.pyc", "*.pyo", ".git", "db/*.db*", "planning_eval/*"]
+        )
+    else:
+        uvicorn.run("web.app:app", host=host, port=port)
 

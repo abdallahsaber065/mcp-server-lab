@@ -72,8 +72,8 @@ def create_chat_session(session_id: str, title: str = "محادثة جديدة",
     conn = get_db_connection()
     with conn:
         conn.execute("""
-            INSERT INTO chat_sessions (session_id, title, role)
-            VALUES (?, ?, ?);
+            INSERT INTO chat_sessions (session_id, title, role, created_at, updated_at)
+            VALUES (?, ?, ?, datetime('now'), datetime('now'));
         """, (session_id, title, role))
     conn.close()
     return {"session_id": session_id, "title": title, "role": role}
@@ -185,6 +185,23 @@ def delete_chat_session(session_id: str) -> bool:
     conn.close()
     return True
 
+def update_chat_session_role(session_id: str, role: str) -> bool:
+    init_db(reset=False)
+    conn = get_db_connection()
+    with conn:
+        conn.execute("UPDATE chat_sessions SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?;", (role, session_id))
+    conn.close()
+    return True
+
+def get_chat_session_role(session_id: str) -> str:
+    init_db(reset=False)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT role FROM chat_sessions WHERE session_id = ?;", (session_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row[0] if row else "property_manager"
+
 # --- REPOSITORY DB OPERATIONAL HELPERS ---
 
 def query_available_units(city: Optional[str] = None, min_beds: Optional[int] = None, max_rent: Optional[float] = None, property_id: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -240,8 +257,19 @@ get_active_lease_by_email = query_tenant_lease
 
 def create_maintenance_record(tenant_id: int, unit_id: int, issue_description: str, priority: str) -> Dict[str, Any]:
     conn = get_db_connection()
+    cur = conn.cursor()
+    
+    cur.execute("SELECT unit_id FROM units WHERE unit_id = ?;", (unit_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise ValueError(f"Unit ID {unit_id} not found in property database. Please verify the unit number.")
+        
+    cur.execute("SELECT tenant_id FROM tenants WHERE tenant_id = ?;", (tenant_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise ValueError(f"Tenant ID {tenant_id} not found in property database.")
+        
     with conn:
-        cur = conn.cursor()
         cur.execute("""
             INSERT INTO maintenance_requests (unit_id, tenant_id, issue_description, priority, status)
             VALUES (?, ?, ?, ?, 'pending');
