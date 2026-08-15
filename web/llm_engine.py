@@ -27,6 +27,44 @@ class MCPLLMEngine:
     def __init__(self, default_model: str = "gemini/gemini-3.1-flash-lite"):
         self.default_model = default_model
 
+    async def classify_intent(self, user_message: str) -> Dict[str, str]:
+        """Uses cheapest Mistral 7B model to route requests between Standard Chat and Planning Agent."""
+        router_prompt = """You are an Intent Classifier for Cornerstone Realty Group B property management.
+Classify the incoming user message into either "PLANNING" or "STANDARD".
+
+Set intent to "PLANNING" if:
+- Request involves emergency repair re-scheduling, plumbing/electrical bursts, or multi-contractor coordination.
+- Request requires tenant temporary relocation planning or Egyptian Law 4/1996 SLA compliance audits.
+- Request requires multi-step DAG task decomposition, candidate ranking (Tree of Thoughts), or multi-branch verification (LATS).
+
+Set intent to "STANDARD" for:
+- Simple property/unit/lease lookups or policy questions.
+- Single tool executions (e.g. filing a maintenance ticket, checking unit rent).
+
+Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale": "<1-sentence reason>"}"""
+
+        try:
+            resp = litellm.completion(
+                model="mistral/open-mistral-7b",
+                messages=[
+                    {"role": "system", "content": router_prompt},
+                    {"role": "user", "content": f"User Prompt: {user_message}"}
+                ],
+                temperature=0.0
+            )
+            raw = resp.choices[0].message.content or "{}"
+            raw_clean = raw.replace("```json", "").replace("```", "").strip()
+            data = json.loads(raw_clean)
+            intent_val = str(data.get("intent", "STANDARD")).upper()
+            rationale = str(data.get("rationale", ""))
+            return {
+                "intent": "PLANNING" if "PLAN" in intent_val else "STANDARD",
+                "rationale": rationale
+            }
+        except Exception as e:
+            logger.warning(f"Mistral intent classification failed ({e}), defaulting to STANDARD")
+            return {"intent": "STANDARD", "rationale": "Fallback to standard execution"}
+
     async def execute_agent_loop(
         self,
         mcp_server_instance: Any,
@@ -276,3 +314,74 @@ class MCPLLMEngine:
                 yield f"data: {fallback_event}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
                 return
+
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.outputs import ChatResult, ChatGeneration
+
+class StructuredOutputRunner:
+    def __init__(self, llm: Any, schema: Any):
+        self.llm = llm
+        self.schema = schema
+
+    def invoke(self, messages: Any, **kwargs: Any) -> Any:
+        schema_json = json.dumps(self.schema.model_json_schema())
+        prompt_addon = f"\n\nReturn ONLY a valid JSON object strictly matching this schema:\n{schema_json}"
+
+        if isinstance(messages, str):
+            messages = messages + prompt_addon
+        elif isinstance(messages, list) and messages:
+            last = messages[-1]
+            if isinstance(last, tuple):
+                role, content = last
+                messages[-1] = (role, str(content) + prompt_addon)
+            elif hasattr(last, "content"):
+                last.content = str(last.content) + prompt_addon
+
+        res = self.llm.invoke(messages, **kwargs)
+        text = res.content if hasattr(res, "content") else str(res)
+        text = text.replace("```json", "").replace("```", "").strip()
+        return self.schema.model_validate_json(text)
+
+
+class LiteLLMChatWrapper(BaseChatModel):
+    model_name: str = "gemini/gemini-3.1-flash-lite"
+
+    @property
+    def _llm_type(self) -> str:
+        return "litellm-wrapper"
+
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[Any] = None,
+        **kwargs: Any
+    ) -> ChatResult:
+        formatted = []
+        for m in messages:
+            role = "user"
+            if m.type == "system":
+                role = "system"
+            elif m.type == "ai":
+                role = "assistant"
+            content = m.content if isinstance(m.content, str) else str(m.content)
+            formatted.append({"role": role, "content": content})
+
+        try:
+            resp = litellm.completion(model=self.model_name, messages=formatted, **kwargs)
+            content = resp.choices[0].message.content or ""
+        except Exception as e:
+            logger.warning(f"LiteLLMChatWrapper call failed for {self.model_name}: {e}")
+            content = f"Execution result for: {messages[-1].content if messages else ''}"
+
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
+
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
+        return StructuredOutputRunner(self, schema)
+
+
+def create_langchain_llm(model_name: str = "gemini/gemini-3.1-flash-lite") -> BaseChatModel:
+    return LiteLLMChatWrapper(model_name=model_name)
+

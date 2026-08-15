@@ -134,6 +134,7 @@
 
 .showcase-section-icon.week2 { background: linear-gradient(135deg, #3b82f6, #6366f1); }
 .showcase-section-icon.week3 { background: linear-gradient(135deg, #10b981, #06b6d4); }
+.showcase-section-icon.week4 { background: linear-gradient(135deg, #ec4899, #8b5cf6); }
 .showcase-section-icon.team { background: linear-gradient(135deg, #f59e0b, #ef4444); }
 
 .showcase-section-title {
@@ -180,18 +181,19 @@
   transform: translateY(0);
 }
 
-/* ── Feature Category Filter Pills ── */
+/* ── Interactive Feature Filter Pills ── */
 .feature-filter-pills {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .filter-pill {
-  padding: 6px 14px;
-  border-radius: 20px;
-  background: var(--bg-card);
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -252,6 +254,8 @@
 .feature-card-icon.amber { background: var(--amber-glow); color: var(--amber); }
 .feature-card-icon.red { background: var(--red-glow); color: var(--red); }
 .feature-card-icon.purple { background: rgba(167,139,250,0.15); color: #a78bfa; }
+.feature-card-icon.pink { background: rgba(236, 72, 153, 0.15); color: #ec4899; }
+.feature-card-icon.cyan { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
 
 .feature-card h3 {
   font-size: 15px;

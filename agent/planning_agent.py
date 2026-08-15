@@ -5,7 +5,7 @@ self-correction (Self-Refine, Reflexion), and grounded environment feedback.
 Reuses existing mcp_server/ and db/ without touching Week 1-3 memory/RAG code paths.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import json
 import logging
 from pathlib import Path
@@ -21,7 +21,26 @@ from planning.self_refine import reflect_and_refine
 from planning.reflexion import reflexion
 from planning.environment import Environment
 
+import litellm
+
 logger = logging.getLogger(__name__)
+
+SUBTASK_ROUTER_PROMPT = """You are a Master Planning Algorithm Router for Cornerstone Realty Group B property management systems.
+Your job is to analyze a sub-task instruction and route it to the single best search/execution algorithm among:
+
+1. "ToT" (Tree of Thoughts / Beam Search):
+   - Use when the sub-task requires evaluating multiple candidate options, ranking contractors/vendors, comparing hotel relocation facilities, or trade-off decision trees.
+   - Examples: "Rank emergency plumbing vendors by response time and hourly rate", "Compare partner hotel options in Maadi vs Zamalek", "Propose top 3 contractor allocation strategies".
+
+2. "LATS" (Language Agent Tree Search / MCTS + Grounded Environment):
+   - Use when the sub-task requires legal SLA compliance verification, Egyptian Law 4/1996 habitability audits, structural engineering sign-off, or multi-branch constraint validation.
+   - Examples: "Verify compliance under Law 4/1996 Clause 8.1c for emergency 4-hour SLA", "Perform structural integrity clearance and slab moisture audit", "Check legal liability for tenant displacement stipend".
+
+3. "PS" (Plan-and-Solve / Standard Sequential Execution):
+   - Use when the sub-task is a deterministic operational step, status tracking, work order creation, notification dispatch, or site monitoring.
+   - Examples: "Issue formal notices to affected tenants", "Set up 24-hour digital status monitoring alert", "Close out completed work order in property database".
+
+Return ONLY valid JSON matching: {"method": "PS" | "ToT" | "LATS", "rationale": "<1-sentence reason>"}"""
 
 
 class PlanningAgent:
@@ -33,15 +52,30 @@ class PlanningAgent:
 
     def route_subtask(self, instruction: str) -> str:
         """
-        Routes sub-tasks based on shape & risk profile:
-        - Vendor Ranking / Multi-option -> Tree of Thoughts (ToT)
-        - Legal SLA / Emergency Relocation -> LATS (MCTS + Grounded Env)
-        - Cheap-to-redo / simple step -> Plan-and-Solve (PS)
+        Routes a sub-task instruction to PS, ToT, or LATS using Mistral 7B structured classification with heuristic fallback.
         """
+        try:
+            resp = litellm.completion(
+                model="mistral/open-mistral-7b",
+                messages=[
+                    {"role": "system", "content": SUBTASK_ROUTER_PROMPT},
+                    {"role": "user", "content": f"Sub-Task Instruction: {instruction}"}
+                ],
+                temperature=0.0
+            )
+            raw = resp.choices[0].message.content or "{}"
+            clean = raw.replace("```json", "").replace("```", "").strip()
+            data = json.loads(clean)
+            method = str(data.get("method", "PS")).upper()
+            if method in ["PS", "TOT", "LATS"]:
+                return "ToT" if method == "TOT" else method
+        except Exception as e:
+            logger.warning(f"Mistral sub-task routing failed ({e}), using heuristic fallback")
+
         instr_lower = instruction.lower()
-        if "rank" in instr_lower or "vendor" in instr_lower or "priority" in instr_lower:
+        if any(k in instr_lower for k in ["rank", "vendor", "priority", "compare", "propose options"]):
             return "ToT"
-        elif "relocat" in instr_lower or "law 4/1996" in instr_lower or "verify" in instr_lower or "emergency" in instr_lower:
+        elif any(k in instr_lower for k in ["relocat", "law 4/1996", "verify", "emergency", "audit", "compliance"]):
             return "LATS"
         else:
             return "PS"
@@ -75,9 +109,10 @@ class PlanningAgent:
             output = plan_and_solve(subtask_name, self.llm)
             return {"method": "PS", "output": output, "status": "success"}
 
-    def execute_request(self, request: str) -> Dict[str, Any]:
+    def execute_request(self, request: str, step_callback: Optional[Any] = None) -> Dict[str, Any]:
         """
-        Executes top-level enterprise request using static or dynamic DAG decomposition.
+        Executes top-level enterprise request using static or dynamic DAG decomposition,
+        invoking step_callback(st_data) in real time after each sub-task completion.
         """
         logger.info(f"Executing request (mode={self.mode}): {request}")
         trace: Dict[str, Any] = {"request": request, "mode": self.mode, "subtasks": []}
@@ -93,17 +128,46 @@ class PlanningAgent:
                     method = self.route_subtask(task_item.instruction)
                     res = self.execute_subtask(task_item.instruction, method)
                     raw_outputs[task_id] = str(res["output"])
-                    trace["subtasks"].append({"task_id": task_id, "instruction": task_item.instruction, "routing": res})
+                    
+                    st_data = {"task_id": task_id, "instruction": task_item.instruction, "routing": res}
+                    trace["subtasks"].append(st_data)
+                    if step_callback:
+                        step_callback(st_data)
 
             summary = final_output(plan, raw_outputs)
             trace["summary"] = summary
         else:
-            history = dynamic_decomposition(request, self.llm, max_steps=4)
+            history = dynamic_decomposition(request, self.llm, max_steps=3)
             trace["history"] = history
-            for task, res in history:
+            
+            executed_steps = []
+            for task, raw_res in history:
                 method = self.route_subtask(task)
-                trace["subtasks"].append({"instruction": task, "method": method, "result": res})
-            summary = "\n".join(f"{task}: {res}" for task, res in history)
+                res = self.execute_subtask(task, method)
+                executed_steps.append((task, res))
+                
+                st_data = {
+                    "instruction": task,
+                    "method": method,
+                    "result": res,
+                    "routing": res
+                }
+                trace["subtasks"].append(st_data)
+                if step_callback:
+                    step_callback(st_data)
+            
+            # Synthesize clean executive summary instead of raw string concatenation
+            synthesis_prompt = f"""Synthesize a concise, polished Executive Action Plan (in clean Markdown) for the goal: {request!r}
+Based on these executed sub-task results:
+"""
+            for task, res in executed_steps:
+                synthesis_prompt += f"\n- Sub-task ({res.get('method')}): {task}\n  Output: {res.get('output')}\n"
+
+            syn_res = self.llm.invoke([
+                ("system", "You are an executive property management planner. Produce a clean, concise, non-repetitive Markdown synthesis of the action plan."),
+                ("human", synthesis_prompt)
+            ])
+            summary = syn_res.content if hasattr(syn_res, "content") else str(syn_res)
             trace["summary"] = summary
 
         self.traces.append(trace)

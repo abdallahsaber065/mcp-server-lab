@@ -21,15 +21,17 @@ class Environment:
         self.db_path = Path(db_path)
 
     def _check_db_active_emergencies(self) -> int:
-        if not self.db_path.exists():
-            return 0
         try:
-            conn = sqlite3.connect(self.db_path)
+            from mcp_server.db_helpers import get_db_connection
+            conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT count(*) FROM maintenance_requests WHERE priority = 'urgent'")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            count = row[0] if row else 0
             conn.close()
             return count
+        except Exception:
+            return 0
         except Exception:
             return 0
 

@@ -591,7 +591,70 @@ async def chat_stream_endpoint(req: StreamChatRequest):
     
     async def sse_wrapper():
         full_assistant_text = ""
-        # Emit active memory context card if tenant has active facts or episodes
+
+        # Step 1: Run Mistral Intent Classification Router
+        intent_res = await llm_engine.classify_intent(req.user_message)
+        intent_event = {
+            "type": "intent_routed",
+            "intent": intent_res["intent"],
+            "rationale": intent_res["rationale"]
+        }
+        save_chat_message(
+            session_id=req.session_id,
+            msg_type="intent_routed",
+            content=json.dumps(intent_event, ensure_ascii=False)
+        )
+        yield f"data: {json.dumps(intent_event)}\n\n"
+
+        if intent_res["intent"] == "PLANNING":
+            try:
+                from agent.planning_agent import PlanningAgent
+                from web.llm_engine import create_langchain_llm
+                planning_llm = create_langchain_llm(req.model or "gemini/gemini-3.1-flash-lite")
+                agent = PlanningAgent(llm=planning_llm, mode="dynamic")
+                agent.environment.mode = "grounded"
+
+                queue = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def on_subtask_complete(st_data):
+                    routing = st_data.get("routing", {})
+                    sub_event = {
+                        "type": "planning_subtask",
+                        "instruction": st_data.get("instruction", ""),
+                        "method": routing.get("method") or st_data.get("method") or "PS",
+                        "output": routing.get("output", "")
+                    }
+                    save_chat_message(
+                        session_id=req.session_id,
+                        msg_type="planning_subtask",
+                        content=json.dumps(sub_event, ensure_ascii=False)
+                    )
+                    loop.call_soon_threadsafe(queue.put_nowait, sub_event)
+
+                fut = loop.run_in_executor(None, agent.execute_request, req.user_message, on_subtask_complete)
+
+                while not fut.done() or not queue.empty():
+                    try:
+                        sub_event = await asyncio.wait_for(queue.get(), timeout=0.1)
+                        yield f"data: {json.dumps(sub_event)}\n\n"
+                    except asyncio.TimeoutError:
+                        pass
+
+                res = await fut
+                summary_text = res.get("summary", "")
+
+                for char_batch in [summary_text[i:i+8] for i in range(0, len(summary_text), 8)]:
+                    yield f"data: {json.dumps({'type': 'token', 'content': char_batch})}\n\n"
+                    await asyncio.sleep(0.01)
+
+                save_chat_message(session_id=req.session_id, msg_type="assistant", content=summary_text)
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                return
+            except Exception as e:
+                logger.error(f"Planning execution error in SSE chat stream: {e}")
+
+        # Step 2: Standard execution flow
         if active_facts or recent_episodes:
             mem_event = {
                 "type": "memory_context",
@@ -606,6 +669,11 @@ async def chat_stream_endpoint(req: StreamChatRequest):
                     for ep in recent_episodes
                 ]
             }
+            save_chat_message(
+                session_id=req.session_id,
+                msg_type="memory_context",
+                content=json.dumps(mem_event, ensure_ascii=False)
+            )
             yield f"data: {json.dumps(mem_event)}\n\n"
 
         async for chunk in stream_gen:
@@ -645,6 +713,11 @@ async def chat_stream_endpoint(req: StreamChatRequest):
                                     "critique_rationale": critique.critique_rationale,
                                     "faithfulness_score": critique.faithfulness_score
                                 }
+                                save_chat_message(
+                                    session_id=req.session_id,
+                                    msg_type="self_rag_verification",
+                                    content=json.dumps(critique_payload, ensure_ascii=False)
+                                )
                                 yield f"data: {json.dumps(critique_payload)}\n\n"
                 except Exception as e:
                     logger.error(f"Error parsing/saving SSE event to DB: {e}")
@@ -678,6 +751,47 @@ async def respond_elicitation(req: ElicitationResponse):
         "final_answer": answer_text,
         "result": res
     }
+
+class PlanningExecuteRequest(BaseModel):
+    request: str = "Emergency plumbing burst at Nile Tower Cairo. Re-plan contractor schedules under Egyptian Law 4/1996 SLAs."
+    mode: str = "dynamic"
+    env_mode: str = "grounded"
+
+@app.post("/api/planning/execute")
+async def execute_planning_agent_endpoint(req: PlanningExecuteRequest):
+    try:
+        from agent.planning_agent import PlanningAgent
+        from web.llm_engine import create_langchain_llm
+        llm = create_langchain_llm("gemini/gemini-3.1-flash-lite")
+        
+        agent = PlanningAgent(llm=llm, mode=req.mode)
+        agent.environment.mode = req.env_mode
+        
+        res = agent.execute_request(req.request)
+        return {
+            "status": "success",
+            "request": req.request,
+            "mode": req.mode,
+            "env_mode": req.env_mode,
+            "summary": res.get("summary", ""),
+            "trace": res.get("trace", {})
+        }
+    except Exception as e:
+        logger.error(f"Planning execution error: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+            "summary": f"Execution failed: {str(e)}"
+        }
+
+@app.get("/api/planning/benchmarks")
+async def get_planning_benchmarks():
+    results_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "planning_eval", "results.json")
+    if os.path.exists(results_path):
+        with open(results_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return {"status": "success", "benchmarks": data}
+    return {"status": "error", "message": "Benchmark results not found"}
 
 if __name__ == "__main__":
     import uvicorn

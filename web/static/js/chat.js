@@ -107,6 +107,23 @@ async function loadChatSession(sessionId) {
         else if (m.type === 'assistant') renderMessage('assistant', m.content);
         else if (m.type === 'tool_trace') renderToolCard(m.tool, m.args, m.result);
         else if (m.type === 'elicitation') renderElicitation(m.payload);
+        else if (m.type === 'intent_routed') {
+          let p = {};
+          try { p = JSON.parse(m.content); } catch (e) { p = {}; }
+          renderIntentBadge(p.intent || 'STANDARD', p.rationale || '');
+        } else if (m.type === 'memory_context') {
+          let p = {};
+          try { p = JSON.parse(m.content); } catch (e) { p = {}; }
+          renderMemoryCard(p);
+        } else if (m.type === 'self_rag_verification') {
+          let p = {};
+          try { p = JSON.parse(m.content); } catch (e) { p = {}; }
+          renderSelfRagBadge(p);
+        } else if (m.type === 'planning_subtask') {
+          let p = {};
+          try { p = JSON.parse(m.content); } catch (e) { p = {}; }
+          renderPlanningSubtaskCard(p);
+        }
       });
     }
   } catch (e) { console.error('Failed to load session:', e); }
@@ -160,7 +177,11 @@ function renderMessage(role, content) {
     div.classList.add('ai-response-content');
     const dir = detectTextDirection(content);
     if (dir) div.classList.add(dir);
-    div.innerHTML = content;
+    if (content && window.marked && typeof window.marked.parse === 'function') {
+      div.innerHTML = window.marked.parse(content);
+    } else {
+      div.innerHTML = content || '';
+    }
   } else {
     const dir = detectTextDirection(content);
     if (dir) div.classList.add(dir);
@@ -290,7 +311,7 @@ function renderMemoryCard(event) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v1a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M4 14a8 8 0 0 0 16 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
         </div>
         <span class="memory-card-title">Active Memory Context — ${event.persona_name || 'Tenant'}</span>
-        <span class="memory-card-badge">${facts.length} Active Facts</span>
+        <span class="memory-card-badge">${facts.length} Facts • ${episodes.length} Episodes</span>
       </div>
       <span class="toggle-icon">&#9660;</span>
     </div>
@@ -300,15 +321,15 @@ function renderMemoryCard(event) {
         <div class="fact-list">
           ${facts.map(f => `
             <div class="fact-item">
-              <span class="fact-badge">[${f.category.toUpperCase()}]</span>
+              <span class="fact-badge">[${(f.category || 'fact').toUpperCase()}]</span>
               <span class="fact-val">${f.value}</span>
-              <span class="fact-ver">v${f.version}</span>
+              <span class="fact-ver">v${f.version || 1}</span>
             </div>
           `).join('')}
         </div>
       ` : ''}
       ${episodes.length > 0 ? `
-        <div class="memory-section-title" style="margin-top:10px;">Recent Episodic Store Events</div>
+        <div class="memory-section-title" style="margin-top:${facts.length > 0 ? '10px' : '0'};">Recent Episodic Store Events</div>
         <div class="episode-list">
           ${episodes.map(e => `
             <div class="episode-item">
@@ -326,17 +347,11 @@ function renderMemoryCard(event) {
 
 function toggleMemoryCard(header) {
   const card = header.closest('.memory-context-card');
+  if (!card) return;
   const isOpen = card.dataset.open === 'true';
   card.dataset.open = isOpen ? 'false' : 'true';
-  const body = card.querySelector('.memory-card-body');
   const icon = card.querySelector('.toggle-icon');
-  if (isOpen) {
-    body.style.display = 'none';
-    icon.innerHTML = '&#9654;';
-  } else {
-    body.style.display = 'block';
-    icon.innerHTML = '&#9660;';
-  }
+  if (icon) icon.innerHTML = isOpen ? '&#9654;' : '&#9660;';
 }
 
 // ── Self-RAG Verification Badge ──
@@ -395,6 +410,34 @@ async function fetchTenantMemories() {
 
 // ── SSE Stream Chat ──
 
+let currentAbortController = null;
+
+function abortChatStream() {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+  const thinkingEl = document.getElementById('thinkingIndicator');
+  if (thinkingEl) thinkingEl.style.display = 'none';
+
+  const btnSend = document.getElementById('btnSendMessage');
+  const btnStop = document.getElementById('btnStopMessage');
+  if (btnSend) btnSend.style.display = 'flex';
+  if (btnStop) btnStop.style.display = 'none';
+
+  const hist = document.getElementById('chatHistory');
+  if (hist) {
+    const badge = document.createElement('div');
+    badge.className = 'intent-routed-badge';
+    badge.style.background = 'rgba(244, 63, 94, 0.15)';
+    badge.style.border = '1px solid rgba(244, 63, 94, 0.3)';
+    badge.style.color = '#f43f5e';
+    badge.innerHTML = `<span>🛑 <strong>Generation Interrupted by User</strong></span>`;
+    hist.appendChild(badge);
+    hist.scrollTop = hist.scrollHeight;
+  }
+}
+
 async function sendChatMessageStream() {
   if (!activeSessionId) await createNewChatSession();
   const inputEl = document.getElementById('userInput');
@@ -406,31 +449,29 @@ async function sendChatMessageStream() {
   inputEl.style.height = 'auto';
 
   // Optimistically update session title in sidebar immediately on first message
-  const activeItemTitle = document.querySelector('.session-item.active .session-title') || document.querySelector(`.session-item[data-id="${activeSessionId}"] .session-title`);
-  if (activeItemTitle) {
-    const currentTitle = activeItemTitle.textContent.trim().toLowerCase();
-    const isDefault = ['new conversation', 'new chat', 'محادثة جديدة'].some(k => currentTitle.includes(k));
-    if (isDefault) {
-      activeItemTitle.textContent = text.slice(0, 35) + (text.length > 35 ? '...' : '');
-    }
-  }
-
-
+  autoResizeTextarea(inputEl);
 
   const role = document.getElementById('roleSelect').value;
-
   const model = document.getElementById('modelSelect').value;
   const ragStrategy = document.getElementById('ragSelect').value;
+
+  const btnSend = document.getElementById('btnSendMessage');
+  const btnStop = document.getElementById('btnStopMessage');
+  if (btnSend) btnSend.style.display = 'none';
+  if (btnStop) btnStop.style.display = 'flex';
 
   let bubble = null;
   let fullText = '';
   const thinkingEl = document.getElementById('thinkingIndicator');
   if (thinkingEl) thinkingEl.style.display = 'flex';
 
+  currentAbortController = new AbortController();
+
   try {
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: currentAbortController.signal,
       body: JSON.stringify({
         session_id: activeSessionId,
         user_message: text,
@@ -439,6 +480,10 @@ async function sendChatMessageStream() {
         conversation_history: []
       })
     });
+
+    if (!response.ok) {
+      throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
+    }
 
     // Refresh chat list so sidebar updates title immediately on first message
     fetch('/api/chats').then(res => res.json()).then(sessions => renderSessionList(sessions));
@@ -463,7 +508,12 @@ async function sendChatMessageStream() {
         try {
           const event = JSON.parse(dataStr);
 
-          if (event.type === 'memory_context') {
+          if (event.type === 'intent_routed') {
+            renderIntentBadge(event.intent, event.rationale);
+          } else if (event.type === 'planning_subtask') {
+            if (thinkingEl) thinkingEl.style.display = 'none';
+            renderPlanningSubtaskCard(event);
+          } else if (event.type === 'memory_context') {
             renderMemoryCard(event);
           } else if (event.type === 'tool_call') {
             if (thinkingEl) thinkingEl.style.display = 'none';
@@ -476,7 +526,12 @@ async function sendChatMessageStream() {
             const dir = detectTextDirection(fullText);
             if (dir) bubble.classList.add(dir);
             else bubble.classList.remove('dir-ltr');
-            bubble.innerHTML = fullText;
+            
+            if (window.marked && typeof window.marked.parse === 'function') {
+              bubble.innerHTML = window.marked.parse(fullText);
+            } else {
+              bubble.innerHTML = fullText;
+            }
             document.getElementById('chatHistory').scrollTop = 999999;
           } else if (event.type === 'self_rag_verification') {
             renderSelfRagBadge(event);
@@ -492,12 +547,20 @@ async function sendChatMessageStream() {
     }
 
     const sessions = await (await fetch('/api/chats')).json();
-
     renderSessionList(sessions);
   } catch (e) {
+    if (e.name === 'AbortError') {
+      console.log('Chat stream intentionally aborted by user.');
+    } else {
+      if (thinkingEl) thinkingEl.style.display = 'none';
+      if (!bubble) bubble = renderMessage('assistant', '');
+      bubble.innerHTML = `<div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#f87171; padding:10px 14px; border-radius:8px;">⚠️ <strong>Stream Error:</strong> ${e.message}</div>`;
+    }
+  } finally {
+    currentAbortController = null;
     if (thinkingEl) thinkingEl.style.display = 'none';
-    if (!bubble) bubble = renderMessage('assistant', '');
-    bubble.innerHTML = `<p>Connection error: ${e.message}</p>`;
+    if (btnSend) btnSend.style.display = 'flex';
+    if (btnStop) btnStop.style.display = 'none';
   }
 }
 
@@ -511,4 +574,75 @@ function handleKeyDown(e) {
 function autoResizeTextarea(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function renderIntentBadge(intent, rationale) {
+  const hist = document.getElementById('chatHistory');
+  if (!hist) return;
+  const badge = document.createElement('div');
+  badge.className = 'intent-routed-badge';
+  
+  let icon = '⚡';
+  let title = 'Standard Query';
+  if (intent === 'PLANNING') { icon = '🧩'; title = 'Autonomous Planning Agent (Week 4)'; }
+  
+  badge.innerHTML = `
+    <span class="intent-tag">${icon} ${intent}</span>
+    <span><strong>Intent Router (Mistral 7B):</strong> ${escapeHtml(rationale || title)}</span>
+  `;
+  hist.appendChild(badge);
+  hist.scrollTop = hist.scrollHeight;
+}
+
+function togglePlanningCard(headerEl) {
+  const card = headerEl.closest('.planning-chat-card');
+  if (!card) return;
+  const isExpanded = card.dataset.expanded !== 'false';
+  card.dataset.expanded = isExpanded ? 'false' : 'true';
+  const body = card.querySelector('.planning-card-body');
+  const icon = card.querySelector('.planning-toggle-icon');
+  if (isExpanded) {
+    body.style.display = 'none';
+    if (icon) icon.innerHTML = '&#9654;';
+  } else {
+    body.style.display = 'block';
+    if (icon) icon.innerHTML = '&#9660;';
+  }
+}
+
+function renderPlanningSubtaskCard(st) {
+  const hist = document.getElementById('chatHistory');
+  if (!hist) return;
+  const card = document.createElement('div');
+  const method = st.method || 'PS';
+  
+  let badgeClass = 'planning-card-ps';
+  let tagColor = '#10b981';
+  if (method === 'ToT') { badgeClass = 'planning-card-tot'; tagColor = '#8b5cf6'; }
+  if (method === 'LATS') { badgeClass = 'planning-card-lats'; tagColor = '#f43f5e'; }
+
+  const parsedOutput = (window.marked && typeof window.marked.parse === 'function')
+    ? window.marked.parse(st.output || '')
+    : escapeHtml(st.output || '');
+
+  card.className = `planning-chat-card ${badgeClass}`;
+  card.dataset.expanded = 'true';
+
+  card.innerHTML = `
+    <div class="planning-card-header" onclick="togglePlanningCard(this)" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:8px;">
+      <div style="display:flex; align-items:center; gap:8px; flex:1;">
+        <span style="background:${tagColor}; color:#fff; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:bold; flex-shrink:0;">${method} ROUTED</span>
+        <span style="font-weight:600; color:#f8fafc; font-size:0.88rem;">${escapeHtml(st.instruction)}</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; flex-shrink:0; margin-left:10px;">
+        <span style="color:#64748b; font-size:0.75rem;">Sub-Task</span>
+        <span class="planning-toggle-icon" style="color:#94a3b8; font-size:0.8rem;">&#9660;</span>
+      </div>
+    </div>
+    <div class="planning-card-body ai-response-content" style="background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:8px; font-size:0.85rem; color:#cbd5e1; border:1px solid rgba(255,255,255,0.05);">
+      ${parsedOutput}
+    </div>
+  `;
+  hist.appendChild(card);
+  hist.scrollTop = hist.scrollHeight;
 }
