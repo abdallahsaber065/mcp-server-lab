@@ -19,6 +19,14 @@ from mcp_server.schemas import (
 # Week 3: rag/ and memory/ moved to top-level packages (rag/, memory/)
 # Old mcp_server/rag and mcp_server/memory removed — see Week 3 instruction files
 
+from mcp_server.notifications import dispatcher, ToolListChangedNotification
+from db.session import get_sync_db, init_sync_db
+from services.property_service import PropertyService
+from services.lease_service import LeaseService
+from services.maintenance_service import MaintenanceService
+from services.tool_registry_service import ToolRegistryService
+
+
 class CornerstoneMCPServer:
     """Cornerstone Realty Group MCP Server implementing protocol concerns."""
     
@@ -27,8 +35,27 @@ class CornerstoneMCPServer:
         self.version = "1.0.0"
         self.protocol_version = "2025-06-18"
         init_db()
+        init_sync_db()
         self.current_user_role = "property_manager"  # Default role for notification demo
-        
+
+    def get_agent_tool_bindings(self, agent_id: str) -> Dict[str, bool]:
+        """Return enabled status for tools assigned to a specific agent via ToolRegistryService."""
+        with next(get_sync_db()) as session:
+            return ToolRegistryService.get_agent_tools(session, agent_id)
+
+    def toggle_agent_tool(self, agent_id: str, tool_name: str, is_enabled: bool) -> bool:
+        """Dynamically enable or disable a tool for an agent at runtime via ToolRegistryService."""
+        active_tools = [t["name"] for t in self.list_tools(agent_id=agent_id)]
+        with next(get_sync_db()) as session:
+            return ToolRegistryService.toggle_tool(
+                session=session,
+                agent_id=agent_id,
+                tool_name=tool_name,
+                is_enabled=is_enabled,
+                current_role=self.current_user_role,
+                active_tools=active_tools
+            )
+
     def get_capabilities(self) -> Dict[str, Any]:
         """Declare capability negotiation capabilities."""
         return {
@@ -47,12 +74,11 @@ class CornerstoneMCPServer:
             "protocolVersion": self.protocol_version
         }
 
-
-    def list_tools(self, role: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Return available tools filtered by authenticated user role."""
+    def list_tools(self, role: Optional[str] = None, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Return available tools filtered by authenticated user role and runtime agent bindings."""
         active_role = role or self.current_user_role
         
-        tools = [
+        all_tools = [
             {
                 "name": "lookup_available_units",
                 "description": "Query available residential/commercial property units by property ID or city location.",
@@ -68,24 +94,32 @@ class CornerstoneMCPServer:
                 "description": "File a maintenance or repair ticket for a property unit.",
                 "inputSchema": MaintenanceRequestArgs.model_json_schema()
             },
-            # Week 3: search_knowledge_base and recall_tenant_memories moved to top-level rag/ and memory/
         ]
         
         # Role-gated write tools (Demonstrates Notifications & defensive auth)
         if active_role in ("property_manager", "executive_admin"):
-            tools.append({
+            all_tools.append({
                 "name": "modify_lease_terms",
                 "description": "Update lease terms or monthly rent. Triggers human elicitation if discount > 15% or high value.",
                 "inputSchema": ModifyLeaseArgs.model_json_schema()
             })
-            tools.append({
+            all_tools.append({
                 "name": "run_property_audit",
                 "description": "Run a comprehensive compliance audit report for a property. Reports live progress updates.",
                 "inputSchema": BatchAuditArgs.model_json_schema()
             })
-            # Week 3: record_tenant_memory moved to top-level memory/
-            
-        return tools
+
+        # Apply runtime agent dynamic bindings if agent_id is provided
+        if agent_id:
+            bindings = self.get_agent_tool_bindings(agent_id)
+            filtered_tools = []
+            for t in all_tools:
+                # If explicitly set to False, omit tool; otherwise default to enabled
+                if bindings.get(t["name"], True):
+                    filtered_tools.append(t)
+            return filtered_tools
+
+        return all_tools
 
     def list_resources(self) -> List[Dict[str, Any]]:
         """Return exposed static resources."""
