@@ -7,6 +7,7 @@ import os
 import logging
 from typing import AsyncGenerator, Generator
 from sqlalchemy import create_engine, event
+from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker, Session
 from db.models import Base
@@ -18,11 +19,18 @@ DEFAULT_DB_FILE = os.path.join(os.path.dirname(__file__), "realty_mcp.db")
 RAW_DB_URL = os.getenv("DATABASE_URL") or os.getenv("MCP_DB_FILE") or DEFAULT_DB_FILE
 
 # 2. Format URLs for Async & Sync Drivers
-if RAW_DB_URL.startswith("postgres://") or RAW_DB_URL.startswith("postgresql://"):
+if RAW_DB_URL.startswith("postgres://") or RAW_DB_URL.startswith("postgresql://") or RAW_DB_URL.startswith("postgresql+"):
     # Production PostgreSQL
     CLEAN_URL = RAW_DB_URL.replace("postgres://", "postgresql://", 1)
-    ASYNC_DATABASE_URL = CLEAN_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-    SYNC_DATABASE_URL = CLEAN_URL
+    if "+asyncpg" in CLEAN_URL:
+        ASYNC_DATABASE_URL = CLEAN_URL
+        SYNC_DATABASE_URL = CLEAN_URL.replace("+asyncpg", "", 1)
+    elif "+psycopg2" in CLEAN_URL:
+        SYNC_DATABASE_URL = CLEAN_URL
+        ASYNC_DATABASE_URL = CLEAN_URL.replace("+psycopg2", "+asyncpg", 1)
+    else:
+        SYNC_DATABASE_URL = CLEAN_URL
+        ASYNC_DATABASE_URL = CLEAN_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
     IS_SQLITE = False
 elif RAW_DB_URL.startswith("sqlite"):
     if "sqlite+aiosqlite" in RAW_DB_URL:
@@ -38,6 +46,10 @@ else:
     SYNC_DATABASE_URL = f"sqlite:///{normalized_path}"
     ASYNC_DATABASE_URL = f"sqlite+aiosqlite:///{normalized_path}"
     IS_SQLITE = True
+
+def get_db_url(is_async: bool = False) -> str:
+    """Retrieve formatted async or sync database URL."""
+    return ASYNC_DATABASE_URL if is_async else SYNC_DATABASE_URL
 
 logger.info("DB Engine initialized. IS_SQLITE: %s | Async URL: %s", IS_SQLITE, ASYNC_DATABASE_URL.split("@")[-1])
 
@@ -68,16 +80,15 @@ else:
     # PostgreSQL production configuration
     async_engine = create_async_engine(
         ASYNC_DATABASE_URL,
-        pool_size=10,
-        max_overflow=20,
+        poolclass=NullPool if os.getenv("TESTING") else None,
         pool_pre_ping=True,
+        pool_recycle=300,
         echo=False
     )
     sync_engine = create_engine(
         SYNC_DATABASE_URL,
-        pool_size=10,
-        max_overflow=20,
         pool_pre_ping=True,
+        pool_recycle=300,
         echo=False
     )
 
