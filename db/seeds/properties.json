@@ -1,0 +1,56 @@
+[
+  {
+    "property_id": 1,
+    "name": "Nile Plaza Luxury Residences",
+    "address": "12 Corniche El Nile, Garden City",
+    "city": "Cairo",
+    "property_type": "luxury_residential",
+    "total_units": 45,
+    "occupancy_rate": 0.93
+  },
+  {
+    "property_id": 2,
+    "name": "Zamalek Royal Heritage Suites",
+    "address": "4 Hassan Sabry Street, Zamalek",
+    "city": "Cairo",
+    "property_type": "heritage_residential",
+    "total_units": 24,
+    "occupancy_rate": 0.88
+  },
+  {
+    "property_id": 3,
+    "name": "Cornerstone Financial Park",
+    "address": "Plot 18, Sector 1, City Center",
+    "city": "New Cairo",
+    "property_type": "commercial_office",
+    "total_units": 60,
+    "occupancy_rate": 0.95
+  },
+  {
+    "property_id": 4,
+    "name": "Giza Pyramids Business Tower",
+    "address": "88 Pyramids Road, Dokki",
+    "city": "Giza",
+    "property_type": "commercial_mixed",
+    "total_units": 35,
+    "occupancy_rate": 0.82
+  },
+  {
+    "property_id": 5,
+    "name": "Sheikh Zayed Horizon Heights",
+    "address": "Central Axis, 12th District",
+    "city": "Sheikh Zayed",
+    "property_type": "residential_compound",
+    "total_units": 80,
+    "occupancy_rate": 0.91
+  },
+  {
+    "property_id": 6,
+    "name": "Alexandria Waterfront Marina",
+    "address": "150 Army Road, Stanley Beach",
+    "city": "Alexandria",
+    "property_type": "resort_residential",
+    "total_units": 30,
+    "occupancy_rate": 0.76
+  }
+]

@@ -24,6 +24,13 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Node & Frontend
+node_modules/
+dist/
+.pnpm-store/
+platform/dist/
+web/dist/
+
 # Private / Internal planning & teammate instructions (Untracked)
 docs/*team_execution_plan*.md
 docs/instructions_for_*.md

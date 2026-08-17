@@ -1,0 +1,93 @@
+[
+  {
+    "lease_id": 1,
+    "unit_id": 101,
+    "tenant_id": 1,
+    "start_date": "2025-09-01",
+    "end_date": "2026-08-31",
+    "monthly_rent": 28000.0,
+    "deposit_amount": 56000.0,
+    "is_active": true,
+    "requires_executive_signoff": false,
+    "payment_status": "current",
+    "notes": "Annual residential lease with standard 2-month security deposit."
+  },
+  {
+    "lease_id": 2,
+    "unit_id": 103,
+    "tenant_id": 2,
+    "start_date": "2025-01-01",
+    "end_date": "2026-12-31",
+    "monthly_rent": 75000.0,
+    "deposit_amount": 225000.0,
+    "is_active": true,
+    "requires_executive_signoff": true,
+    "payment_status": "current",
+    "notes": "Diplomatic high-value lease. Full security clearance approved by Board."
+  },
+  {
+    "lease_id": 3,
+    "unit_id": 201,
+    "tenant_id": 3,
+    "start_date": "2024-06-01",
+    "end_date": "2026-05-31",
+    "monthly_rent": 24000.0,
+    "deposit_amount": 48000.0,
+    "is_active": true,
+    "requires_executive_signoff": false,
+    "payment_status": "arrears",
+    "notes": "Notice sent: 2 months rent pending (48,000 EGP). Eligible for Dispute Mediation Flow."
+  },
+  {
+    "lease_id": 4,
+    "unit_id": 302,
+    "tenant_id": 4,
+    "start_date": "2025-03-01",
+    "end_date": "2028-02-28",
+    "monthly_rent": 120000.0,
+    "deposit_amount": 360000.0,
+    "is_active": true,
+    "requires_executive_signoff": true,
+    "payment_status": "current",
+    "notes": "3-Year Corporate Headquarters Lease with Banque Misr Bank Guarantee Escrow."
+  },
+  {
+    "lease_id": 5,
+    "unit_id": 402,
+    "tenant_id": 5,
+    "start_date": "2025-05-01",
+    "end_date": "2027-04-30",
+    "monthly_rent": 48000.0,
+    "deposit_amount": 144000.0,
+    "is_active": true,
+    "requires_executive_signoff": true,
+    "payment_status": "current",
+    "notes": "Commercial retail franchise with grease-trap maintenance clause."
+  },
+  {
+    "lease_id": 6,
+    "unit_id": 501,
+    "tenant_id": 6,
+    "start_date": "2025-10-01",
+    "end_date": "2026-09-30",
+    "monthly_rent": 52000.0,
+    "deposit_amount": 104000.0,
+    "is_active": true,
+    "requires_executive_signoff": true,
+    "payment_status": "current",
+    "notes": "Compound Villa with private garden and pool service."
+  },
+  {
+    "lease_id": 7,
+    "unit_id": 601,
+    "tenant_id": 7,
+    "start_date": "2025-07-01",
+    "end_date": "2026-06-30",
+    "monthly_rent": 22000.0,
+    "deposit_amount": 44000.0,
+    "is_active": true,
+    "requires_executive_signoff": false,
+    "payment_status": "current",
+    "notes": "Seasonal seaside residential unit in Alexandria."
+  }
+]

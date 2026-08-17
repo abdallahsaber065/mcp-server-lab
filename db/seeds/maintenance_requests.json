@@ -1,0 +1,62 @@
+[
+  {
+    "request_id": 1,
+    "unit_id": 101,
+    "tenant_id": 1,
+    "issue_type": "plumbing",
+    "priority": "emergency",
+    "description": "Main water shutoff valve leaking rapidly beneath kitchen sink, risking parquet flooring damage.",
+    "status": "in_progress",
+    "estimated_cost": 3500.0,
+    "contractor_name": "Cairo Rapid Plumbing Co.",
+    "submitted_at": "2026-08-20T10:15:00"
+  },
+  {
+    "request_id": 2,
+    "unit_id": 201,
+    "tenant_id": 3,
+    "issue_type": "structural",
+    "priority": "high",
+    "description": "Cracking and moisture seepage along the heritage balcony facade overlooking Hassan Sabry St.",
+    "status": "open",
+    "estimated_cost": 28000.0,
+    "contractor_name": "Nile Specialized Structural Contracting",
+    "submitted_at": "2026-08-21T14:30:00"
+  },
+  {
+    "request_id": 3,
+    "unit_id": 302,
+    "tenant_id": 4,
+    "issue_type": "hvac",
+    "priority": "medium",
+    "description": "Central VRV chiller in sector 3 server room throwing Error Code E-44 high head pressure.",
+    "status": "dispatched",
+    "estimated_cost": 8500.0,
+    "contractor_name": "Carrier Egypt Commercial Service",
+    "submitted_at": "2026-08-22T09:00:00"
+  },
+  {
+    "request_id": 4,
+    "unit_id": 402,
+    "tenant_id": 5,
+    "issue_type": "electrical",
+    "priority": "high",
+    "description": "Three-phase commercial sub-distribution panel tripping when commercial ovens operate concurrently.",
+    "status": "open",
+    "estimated_cost": 12000.0,
+    "contractor_name": "Electro-Power Giza Engineering",
+    "submitted_at": "2026-08-22T16:45:00"
+  },
+  {
+    "request_id": 5,
+    "unit_id": 501,
+    "tenant_id": 6,
+    "issue_type": "general",
+    "priority": "low",
+    "description": "Automated garden irrigation timer and sprinkler solenoid valve stuck in closed position.",
+    "status": "resolved",
+    "estimated_cost": 1800.0,
+    "contractor_name": "Green Oasis Landscaping",
+    "submitted_at": "2026-08-15T11:00:00"
+  }
+]

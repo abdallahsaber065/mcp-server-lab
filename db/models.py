@@ -52,11 +52,14 @@ class Tenant(Base):
 
     tenant_id = Column(Integer, primary_key=True, autoincrement=True)
     full_name = Column(String(100), nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
+    email = Column(String(100), unique=True, nullable=False, index=True)
     phone = Column(String(30), nullable=True)
     role = Column(String(30), default="tenant")  # tenant, property_manager, executive_admin
     assigned_unit_id = Column(Integer, ForeignKey("units.unit_id"), nullable=True)
     emergency_contact = Column(String(100), nullable=True)
+    hashed_password = Column(String(200), nullable=True)
+    is_active = Column(Boolean, default=True)
+    refresh_token = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     leases = relationship("Lease", back_populates="tenant")

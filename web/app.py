@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -34,13 +34,25 @@ from mcp_server.db_helpers import (
     save_chat_message, delete_chat_session, get_db_connection,
     update_chat_session_role, get_chat_session_role
 )
-
+from db.session import get_async_db, AsyncSession
+from services.state_graph_service import StateGraphService
+from services.tool_registry_service import ToolRegistryService
+from services.hitl_service import HITLService
+from services.ticket_service import TicketService
+from state_graph.models import GraphState
+from fastapi import Depends
 from web.llm_engine import MCPLLMEngine, AVAILABLE_MODELS
+
+from web.routers import (
+    auth_router, properties_router, leases_router,
+    maintenance_router, showcase_router, state_graph_router, admin_router
+)
+from services.cache_service import cache_service
 
 app = FastAPI(
     title="Cornerstone Realty Group — MCP Autonomous Portal",
     description="Interactive Web UI & FastAPI backend for MCP Server Lab (Session 2)",
-    version="3.5.0"
+    version="4.0.0"
 )
 
 app.add_middleware(
@@ -50,6 +62,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def on_startup():
+    await cache_service.connect()
+
+app.include_router(auth_router)
+app.include_router(properties_router)
+app.include_router(leases_router)
+app.include_router(maintenance_router)
+app.include_router(showcase_router)
+app.include_router(state_graph_router)
+app.include_router(admin_router)
 
 # NOTE FOR EVALUATION:
 # The FastAPI Web Server, Interactive Chat UI, and LLM Web Engine in this folder are
@@ -818,6 +842,142 @@ async def get_planning_benchmarks():
             data = json.load(f)
             return {"status": "success", "benchmarks": data}
     return {"status": "error", "message": "Benchmark results not found"}
+
+
+# ---------------------------------------------------------------------------
+# State Graph Execution & Checkpoint Endpoints (Session 4 & Final Project)
+# ---------------------------------------------------------------------------
+
+class StateGraphRunRequest(BaseModel):
+    graph_id: str
+    run_id: Optional[str] = None
+    variables: Dict[str, Any] = {}
+
+
+@app.post("/api/state-graph/run")
+async def run_state_graph(req: StateGraphRunRequest, db: AsyncSession = Depends(get_async_db)):
+    """Start or advance a state graph run asynchronously."""
+    run_id = req.run_id or f"run-{uuid.uuid4().hex[:8]}"
+    initial_state = GraphState(
+        run_id=run_id,
+        graph_id=req.graph_id,
+        current_node="",
+        variables=req.variables
+    )
+    res_state = await StateGraphService.arun_graph(db, initial_state)
+    return {
+        "status": "success",
+        "run_id": res_state.run_id,
+        "graph_status": res_state.status,
+        "current_node": res_state.current_node,
+        "step_number": res_state.step_number,
+        "pending_hitl": res_state.pending_hitl,
+        "last_error": res_state.last_error,
+        "variables": res_state.variables,
+        "history": res_state.history
+    }
+
+
+@app.get("/api/state-graph/{run_id}")
+async def get_state_graph_status(run_id: str, db: AsyncSession = Depends(get_async_db)):
+    """Retrieve the latest checkpoint state for a run."""
+    state = await StateGraphService.aload_latest_state(db, run_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found.")
+    return {"status": "success", "state": state.model_dump()}
+
+
+# ---------------------------------------------------------------------------
+# Admin Dynamic Tool Matrix Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/admin/agents/{agent_id}/tools")
+async def get_agent_tools(agent_id: str, db: AsyncSession = Depends(get_async_db)):
+    """Get active tool permissions for a given agent persona."""
+    bindings = await ToolRegistryService.aget_agent_tools(db, agent_id)
+    all_tools = mcp_server.list_tools(role="executive_admin")
+    result = []
+    for t in all_tools:
+        result.append({
+            "name": t["name"],
+            "description": t["description"],
+            "is_enabled": bindings.get(t["name"], True)
+        })
+    return {"status": "success", "agent_id": agent_id, "tools": result}
+
+
+class ToggleToolRequest(BaseModel):
+    tool_name: str
+    is_enabled: bool
+
+
+@app.post("/api/admin/agents/{agent_id}/tools/toggle")
+async def toggle_agent_tool(agent_id: str, req: ToggleToolRequest, db: AsyncSession = Depends(get_async_db)):
+    """Dynamically enable/disable a tool for an agent and emit listChanged."""
+    success = await ToolRegistryService.atoggle_tool(
+        session=db,
+        agent_id=agent_id,
+        tool_name=req.tool_name,
+        is_enabled=req.is_enabled
+    )
+    return {"status": "success", "agent_id": agent_id, "tool_name": req.tool_name, "is_enabled": req.is_enabled}
+
+
+# ---------------------------------------------------------------------------
+# Admin HITL Review Queue & Failure Ticket Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/admin/hitl/tasks")
+async def list_hitl_tasks(db: AsyncSession = Depends(get_async_db)):
+    """List pending Human-in-the-Loop review tasks."""
+    tasks = await HITLService.alist_pending_tasks(db)
+    return {"status": "success", "tasks": tasks}
+
+
+class ResolveHITLRequest(BaseModel):
+    decision: str  # approved, rejected, modified
+    notes: Optional[str] = ""
+    decided_by: Optional[str] = "Executive Admin"
+
+
+@app.post("/api/admin/hitl/tasks/{task_id}/resolve")
+async def resolve_hitl_task(task_id: str, req: ResolveHITLRequest, db: AsyncSession = Depends(get_async_db)):
+    """Resolve an HITL review task and unblock state graph."""
+    success = await HITLService.aresolve_task(db, task_id, req.decision, req.notes, req.decided_by)
+    return {"status": "success", "task_id": task_id, "decision": req.decision}
+
+
+@app.get("/api/admin/tickets")
+async def list_failure_tickets(status: Optional[str] = None, db: AsyncSession = Depends(get_async_db)):
+    """List captured state graph node failure tickets."""
+    tickets = await TicketService.alist_tickets(db, status=status)
+    return {"status": "success", "tickets": tickets}
+
+
+# ---------------------------------------------------------------------------
+# SPA Static File Mounting & Web Platform Routing
+# ---------------------------------------------------------------------------
+
+DIST_DIR = os.path.join(os.path.dirname(__file__), "dist")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+if os.path.exists(DIST_DIR) and os.path.exists(os.path.join(DIST_DIR, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(DIST_DIR, "assets")), name="assets")
+
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/")
+async def serve_spa_index():
+    dist_index = os.path.join(DIST_DIR, "index.html")
+    if os.path.exists(dist_index):
+        return FileResponse(dist_index)
+    static_index = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(static_index):
+        return FileResponse(static_index)
+    return HTMLResponse("<h1>Cornerstone Realty Group MCP Platform API Running</h1>")
+
 
 if __name__ == "__main__":
     import uvicorn

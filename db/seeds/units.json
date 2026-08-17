@@ -1,0 +1,134 @@
+[
+  {
+    "unit_id": 101,
+    "property_id": 1,
+    "unit_number": "101-Garden",
+    "bedrooms": 2,
+    "bathrooms": 2.0,
+    "square_feet": 140.0,
+    "monthly_rent": 28000.0,
+    "status": "occupied",
+    "is_high_value": false
+  },
+  {
+    "unit_id": 102,
+    "property_id": 1,
+    "unit_number": "102-NileView",
+    "bedrooms": 3,
+    "bathrooms": 3.0,
+    "square_feet": 210.0,
+    "monthly_rent": 42000.0,
+    "status": "available",
+    "is_high_value": true
+  },
+  {
+    "unit_id": 103,
+    "property_id": 1,
+    "unit_number": "PH-01-Penthouse",
+    "bedrooms": 4,
+    "bathrooms": 4.5,
+    "square_feet": 380.0,
+    "monthly_rent": 75000.0,
+    "status": "occupied",
+    "is_high_value": true
+  },
+  {
+    "unit_id": 201,
+    "property_id": 2,
+    "unit_number": "Z-201",
+    "bedrooms": 2,
+    "bathrooms": 1.5,
+    "square_feet": 125.0,
+    "monthly_rent": 24000.0,
+    "status": "occupied",
+    "is_high_value": false
+  },
+  {
+    "unit_id": 202,
+    "property_id": 2,
+    "unit_number": "Z-202-Heritage",
+    "bedrooms": 3,
+    "bathrooms": 2.5,
+    "square_feet": 195.0,
+    "monthly_rent": 38000.0,
+    "status": "available",
+    "is_high_value": false
+  },
+  {
+    "unit_id": 301,
+    "property_id": 3,
+    "unit_number": "Suite-301",
+    "bedrooms": 0,
+    "bathrooms": 2.0,
+    "square_feet": 260.0,
+    "monthly_rent": 60000.0,
+    "status": "available",
+    "is_high_value": true
+  },
+  {
+    "unit_id": 302,
+    "property_id": 3,
+    "unit_number": "Suite-302-Anchor",
+    "bedrooms": 0,
+    "bathrooms": 4.0,
+    "square_feet": 520.0,
+    "monthly_rent": 120000.0,
+    "status": "occupied",
+    "is_high_value": true
+  },
+  {
+    "unit_id": 401,
+    "property_id": 4,
+    "unit_number": "G-401-Office",
+    "bedrooms": 0,
+    "bathrooms": 1.5,
+    "square_feet": 160.0,
+    "monthly_rent": 35000.0,
+    "status": "available",
+    "is_high_value": false
+  },
+  {
+    "unit_id": 402,
+    "property_id": 4,
+    "unit_number": "G-402-Retail",
+    "bedrooms": 0,
+    "bathrooms": 1.0,
+    "square_feet": 110.0,
+    "monthly_rent": 48000.0,
+    "status": "occupied",
+    "is_high_value": true
+  },
+  {
+    "unit_id": 501,
+    "property_id": 5,
+    "unit_number": "Villa-501",
+    "bedrooms": 4,
+    "bathrooms": 3.5,
+    "square_feet": 310.0,
+    "monthly_rent": 52000.0,
+    "status": "occupied",
+    "is_high_value": true
+  },
+  {
+    "unit_id": 502,
+    "property_id": 5,
+    "unit_number": "Townhouse-502",
+    "bedrooms": 3,
+    "bathrooms": 2.5,
+    "square_feet": 220.0,
+    "monthly_rent": 32000.0,
+    "status": "available",
+    "is_high_value": false
+  },
+  {
+    "unit_id": 601,
+    "property_id": 6,
+    "unit_number": "Marina-601",
+    "bedrooms": 2,
+    "bathrooms": 2.0,
+    "square_feet": 130.0,
+    "monthly_rent": 22000.0,
+    "status": "occupied",
+    "is_high_value": false
+  }
+]
