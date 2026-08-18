@@ -134,6 +134,52 @@ def seed_sync(reset: bool = False):
         session.commit()
         print(f"✅ Seeded {len(rag_data)} RAG Documents.")
 
+        # 8. Memory Subsystem (Episodic & Semantic Stores)
+        try:
+            from memory.episodic_store import EpisodicStore
+            from memory.consolidation import SemanticMemoryStore, SemanticConsolidationEngine
+            ep_store = EpisodicStore(db_path="db/episodic_memory.db")
+            sem_store = SemanticMemoryStore(db_path="db/semantic_memory.db")
+            engine = SemanticConsolidationEngine(ep_store, sem_store)
+
+            episodes = [
+                ("tenant_1", "Tenant Dr. Tarek El-Mahdy reported severe asthma/fume allergy triggered by oil-based paints; requested mandatory low-VOC non-toxic paint for all unit maintenance.", "2026-02-15T09:00:00Z"),
+                ("tenant_1", "Tenant submitted formal preferred contractor window (9:00 AM - 12:00 PM weekdays) to avoid patient clinic consultation hours.", "2026-03-01T11:30:00Z"),
+                ("tenant_2", "Ambassador Jean-Luc Picard requested diplomatic security protocol addendum: 24/7 keycard access for French Embassy security liaisons.", "2026-01-20T10:00:00Z"),
+                ("tenant_3", "Tenant Laila Soliman submitted medical registration for certified therapy dog (Golden Retriever); granted Section 6.1b pet fee exemption.", "2026-02-05T14:15:00Z"),
+                ("tenant_4", "Apex Financial Holding requested emergency backup power circuit prioritization for server room HVAC chilling units.", "2026-02-28T16:00:00Z"),
+                ("tenant_5", "Cinnabon Nile Delta requested 3-phase 380V electrical upgrade and 5% annual rent escalation cap under Cairo commercial tenancy law.", "2026-03-12T13:20:00Z"),
+                ("tenant_6", "Eng. Karim Mostafa requested smart biometric lock installation authorization for Unit 501 for elderly parent accessibility.", "2026-02-18T10:30:00Z"),
+                ("property_manager", "Issued quarterly building compliance audit for Cairo and Alexandria properties; enforcing Egyptian Tenancy Law 4/1996 4-hour emergency water shutoff SLA.", "2026-02-01T09:00:00Z"),
+            ]
+
+            for entity_id, summary, ts in episodes:
+                ep_store.insert_episode(entity_id=entity_id, event_summary=summary, timestamp=ts)
+
+            engine.run_periodic_consolidation()
+            print(f"✅ Seeded {len(episodes)} Episodic Records & Consolidated Semantic Facts.")
+        except Exception as mem_err:
+            print(f"⚠️ Memory seeding notice: {mem_err}")
+
+        # Synchronize PostgreSQL auto-increment sequences after explicit PK insertions
+        from db.session import IS_SQLITE
+        if not IS_SQLITE:
+            from sqlalchemy import text
+            seq_tables = [
+                ("properties", "property_id"),
+                ("units", "unit_id"),
+                ("tenants", "tenant_id"),
+                ("leases", "lease_id"),
+                ("maintenance_requests", "request_id"),
+                ("chat_messages", "message_id")
+            ]
+            for table, col in seq_tables:
+                try:
+                    session.execute(text(f"SELECT setval(pg_get_serial_sequence('{table}', '{col}'), coalesce(max({col}), 1) + 1, false) FROM {table};"))
+                    session.commit()
+                except Exception as seq_err:
+                    session.rollback()
+
     print("\n🎉 Database sync seeding completed successfully!\n")
 
 

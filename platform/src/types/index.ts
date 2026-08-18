@@ -2,6 +2,7 @@ export type UserRole = 'tenant' | 'property_manager' | 'executive_admin' | 'publ
 
 export interface User {
   id: number;
+  tenant_id?: number;
   full_name: string;
   email: string;
   role: UserRole;
@@ -100,13 +101,40 @@ export interface ToolBinding {
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant' | 'system' | 'tool';
-  text: string;
-  timestamp: string;
-  subtasks?: string[];
-  toolTraces?: Array<{ name: string; args: any; result: any; isError?: boolean }>;
+  content?: string;
+  text?: string;
+  created_at?: string;
+  timestamp?: string;
+  intent?: {
+    type: string;
+    rationale: string;
+  };
+  subtasks?: Array<{
+    instruction: string;
+    method: string;
+    output: string;
+    status?: string;
+  }>;
+  toolTraces?: Array<{
+    tool: string;
+    args: any;
+    result: any;
+    status?: string;
+  }>;
   elicitation?: {
     prompt: string;
-    leaseId?: number;
-    proposedRent?: number;
+    lease_id?: number;
+    proposed_rent?: number;
+  };
+  selfRag?: {
+    is_relevant?: boolean;
+    is_supported?: boolean;
+    score?: number;
+    citations?: string[];
+  };
+  memory?: {
+    type?: string;
+    fact?: string;
+    action?: string;
   };
 }

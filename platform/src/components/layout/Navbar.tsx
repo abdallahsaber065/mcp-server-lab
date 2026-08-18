@@ -7,18 +7,16 @@ import {
   Building2,
   Shield,
   Layers,
-  Activity,
   User,
-  LogOut,
   Sparkles,
   Menu,
   ChevronDown,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { useAppStore, AppPage } from '../../stores/useAppStore';
+import { useAppStore } from '../../stores/useAppStore';
 
 export const Navbar: React.FC = () => {
-  const { user, isAuthenticated, role, logout, quickLoginAs } = useAuthStore();
+  const { isAuthenticated, quickLoginAs } = useAuthStore();
   const { currentPage, setCurrentPage, toggleSidebar, addToast } = useAppStore();
   const [showDemoMenu, setShowDemoMenu] = React.useState(false);
 
@@ -27,22 +25,19 @@ export const Navbar: React.FC = () => {
       await quickLoginAs(targetRole);
       setShowDemoMenu(false);
       addToast(`Switched persona to ${targetRole.replace('_', ' ').toUpperCase()}`, 'success');
-      setCurrentPage('dashboard');
+
+      const roleAllowedPages: Record<string, string[]> = {
+        executive_admin: ['home', 'properties', 'showcase', 'status', 'planning', 'dashboard', 'chat', 'stateGraph', 'admin'],
+        property_manager: ['home', 'properties', 'showcase', 'status', 'planning', 'dashboard', 'chat', 'stateGraph'],
+        tenant: ['home', 'properties', 'showcase', 'status', 'planning', 'dashboard', 'chat'],
+      };
+
+      const allowed = roleAllowedPages[targetRole] || ['home', 'properties', 'showcase', 'status', 'planning'];
+      if (!allowed.includes(currentPage) || currentPage === 'login') {
+        setCurrentPage('dashboard');
+      }
     } catch {
       addToast('Failed to switch persona', 'error');
-    }
-  };
-
-  const getRoleBadge = () => {
-    switch (role) {
-      case 'executive_admin':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">Executive Admin</span>;
-      case 'property_manager':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Property Manager</span>;
-      case 'tenant':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Tenant</span>;
-      default:
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-700/50 text-slate-300 border border-slate-600/50">Guest Visitor</span>;
     }
   };
 
@@ -110,13 +105,13 @@ export const Navbar: React.FC = () => {
         </button>
       </nav>
 
-      {/* Auth & Demo Switcher */}
+      {/* Role Switcher & Auth Actions */}
       <div className="flex items-center space-x-3">
         {/* 1-Click Demo Persona Switcher */}
         <div className="relative">
           <button
             onClick={() => setShowDemoMenu(!showDemoMenu)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 text-indigo-300 hover:border-indigo-500/40 transition-colors"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 text-indigo-300 hover:border-indigo-500/40 transition-colors shadow-sm"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>Switch Role</span>
@@ -153,26 +148,7 @@ export const Navbar: React.FC = () => {
           )}
         </div>
 
-        {/* Current User Badge & Profile */}
-        {isAuthenticated && user ? (
-          <div className="flex items-center space-x-2.5 pl-2 border-l border-slate-800">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-medium text-slate-200">{user.full_name}</span>
-              {getRoleBadge()}
-            </div>
-            <button
-              onClick={() => {
-                logout();
-                addToast('Logged out successfully', 'info');
-                setCurrentPage('home');
-              }}
-              className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-              title="Log Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
+        {!isAuthenticated && (
           <button
             onClick={() => setCurrentPage('login')}
             className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 transition-all"

@@ -7,14 +7,10 @@ import json
 from mcp_server.db_helpers import init_db
 from mcp_server.server import CornerstoneMCPServer
 
-@pytest.fixture
-def server(tmp_path):
-    test_db = str(tmp_path / "test_realty.db")
-    os.environ["MCP_DB_FILE"] = test_db
-    init_db(reset=True)
+@pytest.fixture(scope="module")
+def server():
+    init_db(reset=False)
     yield CornerstoneMCPServer()
-    if "MCP_DB_FILE" in os.environ:
-        del os.environ["MCP_DB_FILE"]
 
 def test_capability_negotiation(server):
     caps = server.get_capabilities()

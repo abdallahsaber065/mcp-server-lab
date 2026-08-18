@@ -34,18 +34,45 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  currentPage: (localStorage.getItem('cornerstone_page') as AppPage) || 'home',
-  isSidebarOpen: true,
+  currentPage: (() => {
+    const path = window.location.pathname.replace(/^\//, '').split('/')[0] as AppPage;
+    const validPages: AppPage[] = [
+      'home',
+      'properties',
+      'showcase',
+      'status',
+      'dashboard',
+      'chat',
+      'stateGraph',
+      'admin',
+      'login',
+    ];
+    if (validPages.includes(path)) return path;
+    const stored = localStorage.getItem('cornerstone_page') as AppPage;
+    return validPages.includes(stored) ? stored : 'home';
+  })(),
+  isSidebarOpen: (() => {
+    const saved = localStorage.getItem('cornerstone_sidebar_open');
+    return saved !== null ? saved === 'true' : true;
+  })(),
   theme: 'dark',
   toasts: [],
 
   setCurrentPage: (page) => {
     localStorage.setItem('cornerstone_page', page);
-    window.location.hash = `#/${page}`;
+    const targetPath = page === 'home' ? '/' : `/${page}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ page }, '', targetPath);
+    }
     set({ currentPage: page });
   },
 
-  toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+  toggleSidebar: () =>
+    set((state) => {
+      const next = !state.isSidebarOpen;
+      localStorage.setItem('cornerstone_sidebar_open', String(next));
+      return { isSidebarOpen: next };
+    }),
 
   setTheme: (theme) => {
     if (theme === 'dark') {

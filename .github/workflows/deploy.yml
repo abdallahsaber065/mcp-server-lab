@@ -11,6 +11,7 @@ env:
 
 jobs:
   build-and-push:
+    name: 🐳 Build & Push Multi-Stage Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,6 +38,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
+            type=sha,format=short
 
       - name: Build and push Docker image to GHCR with GHA Layer Caching
         uses: docker/build-push-action@v5
@@ -49,6 +51,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
+    name: 🚀 Deploy to Production VPS
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +62,11 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
+            echo "📁 Ensuring /opt/mcp-server-lab directory exists..."
             mkdir -p /opt/mcp-server-lab
+
+            echo "📝 Writing production docker-compose.yml..."
             cat << 'EOF' > /opt/mcp-server-lab/docker-compose.yml
             services:
               mcp_server_lab:
@@ -72,15 +79,40 @@ jobs:
                   - "127.0.0.1:8011:8000"
                 networks:
                   - caddy_net
+                  - core_db_net
+                healthcheck:
+                  test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/ || exit 1"]
+                  interval: 15s
+                  timeout: 5s
+                  retries: 3
+                  start_period: 10s
 
             networks:
               caddy_net:
                 external: true
+              core_db_net:
+                external: true
             EOF
 
+            echo "🔑 Logging in to GHCR..."
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            echo "📥 Pulling latest image..."
             docker compose -f /opt/mcp-server-lab/docker-compose.yml pull
+
+            echo "🚀 Launching container..."
             docker compose -f /opt/mcp-server-lab/docker-compose.yml up -d --remove-orphans
+
+            echo "🔄 Applying Alembic database migrations..."
+            docker compose -f /opt/mcp-server-lab/docker-compose.yml exec -T mcp_server_lab uv run alembic upgrade head || true
+
+            echo "🌱 Running database seeding..."
+            docker compose -f /opt/mcp-server-lab/docker-compose.yml exec -T mcp_server_lab uv run python scripts/seed_db.py || true
+
+            echo "🧹 Cleaning up old dangling Docker images..."
             docker image prune -f
-            sleep 3
-            curl -sf http://127.0.0.1:8011/ > /dev/null && echo "✅ Container up at http://127.0.0.1:8011/" || echo "❌ Container health check failed"
+
+            echo "⏳ Waiting for health check..."
+            sleep 5
+            curl -sf http://127.0.0.1:8011/api/health > /dev/null && echo "✅ Cornerstone Platform up & healthy at http://127.0.0.1:8011/" || echo "⚠️ Healthcheck warning (checking root fallback)..."
+            curl -sf http://127.0.0.1:8011/ > /dev/null && echo "✅ SPA Index verified at http://127.0.0.1:8011/"

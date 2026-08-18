@@ -26,8 +26,8 @@ export const App: React.FC = () => {
   useEffect(() => {
     checkAuth();
 
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#/', '');
+    const handlePopState = () => {
+      const path = window.location.pathname.replace(/^\//, '').split('/')[0] as AppPage;
       const validPages: AppPage[] = [
         'home',
         'properties',
@@ -39,17 +39,15 @@ export const App: React.FC = () => {
         'admin',
         'login',
       ];
-      if (validPages.includes(hash as AppPage)) {
-        setCurrentPage(hash as AppPage);
+      if (validPages.includes(path)) {
+        setCurrentPage(path);
+      } else if (!path) {
+        setCurrentPage('home');
       }
     };
 
-    window.addEventListener('hashchange', handleHashChange);
-    if (window.location.hash) {
-      handleHashChange();
-    }
-
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const renderPage = () => {
@@ -77,13 +75,25 @@ export const App: React.FC = () => {
     }
   };
 
+  const isChatPage = currentPage === 'chat' && isAuthenticated;
+
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col selection:bg-indigo-500 selection:text-white">
+    <div className="h-screen w-screen bg-slate-950 flex flex-col overflow-hidden selection:bg-indigo-500 selection:text-white">
       <Navbar />
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-7xl mx-auto w-full">
-          {renderPage()}
+        <main
+          className={`flex-1 min-w-0 bg-slate-950/40 ${
+            isChatPage
+              ? 'h-full w-full flex flex-col overflow-hidden p-0'
+              : 'overflow-y-auto p-4 sm:p-6 lg:p-8'
+          }`}
+        >
+          {isChatPage ? (
+            renderPage()
+          ) : (
+            <div className="max-w-7xl mx-auto w-full">{renderPage()}</div>
+          )}
         </main>
       </div>
       <ToastContainer />

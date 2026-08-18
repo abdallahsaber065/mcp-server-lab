@@ -13,6 +13,18 @@
   },
   {
     "request_id": 2,
+    "unit_id": 103,
+    "tenant_id": 2,
+    "issue_type": "electrical",
+    "priority": "medium",
+    "description": "Master bedroom smart dimmer switch intermittently flickering on circuit breaker panel 2.",
+    "status": "dispatched",
+    "estimated_cost": 1200.0,
+    "contractor_name": "Zamalek Electrical Solutions",
+    "submitted_at": "2026-08-21T09:30:00"
+  },
+  {
+    "request_id": 3,
     "unit_id": 201,
     "tenant_id": 3,
     "issue_type": "structural",
@@ -24,7 +36,7 @@
     "submitted_at": "2026-08-21T14:30:00"
   },
   {
-    "request_id": 3,
+    "request_id": 4,
     "unit_id": 302,
     "tenant_id": 4,
     "issue_type": "hvac",
@@ -36,7 +48,7 @@
     "submitted_at": "2026-08-22T09:00:00"
   },
   {
-    "request_id": 4,
+    "request_id": 5,
     "unit_id": 402,
     "tenant_id": 5,
     "issue_type": "electrical",
@@ -48,7 +60,7 @@
     "submitted_at": "2026-08-22T16:45:00"
   },
   {
-    "request_id": 5,
+    "request_id": 6,
     "unit_id": 501,
     "tenant_id": 6,
     "issue_type": "general",
@@ -58,5 +70,17 @@
     "estimated_cost": 1800.0,
     "contractor_name": "Green Oasis Landscaping",
     "submitted_at": "2026-08-15T11:00:00"
+  },
+  {
+    "request_id": 7,
+    "unit_id": 601,
+    "tenant_id": 7,
+    "issue_type": "hvac",
+    "priority": "low",
+    "description": "Scheduled semi-annual sea-salt air filter replacement for beachfront rooftop HVAC condensers.",
+    "status": "resolved",
+    "estimated_cost": 2400.0,
+    "contractor_name": "Alex Marine Climate Corp",
+    "submitted_at": "2026-08-18T13:00:00"
   }
 ]

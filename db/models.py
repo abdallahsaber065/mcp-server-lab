@@ -122,8 +122,14 @@ class ChatMessage(Base):
 
     message_id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(String(64), ForeignKey("chat_sessions.session_id"), nullable=False)
-    sender = Column(String(20), nullable=False)  # user, assistant, system, tool
-    message_text = Column(Text, nullable=False)
+    sender = Column(String(50), default="assistant")  # user, assistant, system, tool
+    msg_type = Column(String(50), default="assistant")  # user, assistant, tool_trace, elicitation, planning_subtask
+    message_text = Column(Text, nullable=True)
+    content = Column(Text, nullable=True)
+    tool_name = Column(String(100), nullable=True)
+    tool_args = Column(Text, nullable=True)
+    tool_result = Column(Text, nullable=True)
+    elicitation_payload = Column(Text, nullable=True)
     sse_payload = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

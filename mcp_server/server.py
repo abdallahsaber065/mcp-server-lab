@@ -233,40 +233,35 @@ class CornerstoneMCPServer:
 
             elif name == "run_property_audit":
                 validated = BatchAuditArgs(**arguments)
-                
-                conn = get_db_connection()
-                cur = conn.cursor()
-                cur.execute("SELECT property_id, name FROM properties WHERE property_id = ?;", (validated.property_id,))
-                prop_row = cur.fetchone()
-                if not prop_row:
-                    conn.close()
+                from db.models import Property, Unit
+                with next(get_sync_db()) as session:
+                    prop = session.get(Property, validated.property_id)
+                    if not prop:
+                        return {
+                            "status": "error",
+                            "error_type": "ToolExecutionException",
+                            "message": f"Property ID {validated.property_id} not found in property database. Please verify the property identifier."
+                        }
+
+                    progress_history = []
+                    for step in range(1, 6):
+                        pct = step * 20
+                        msg = f"Auditing {prop.name} (ID: {validated.property_id}) - Step {step}/5 ({pct}%)"
+                        progress_history.append({"step": step, "percentage": pct, "message": msg})
+
+                    units = session.query(Unit).filter(Unit.property_id == validated.property_id).all()
+                    total_u = len(units)
+                    occupied_u = len([u for u in units if u.status == "occupied"])
+
                     return {
-                        "status": "error",
-                        "error_type": "ToolExecutionException",
-                        "message": f"Property ID {validated.property_id} not found in property database. Please verify the property identifier."
+                        "status": "success",
+                        "property_id": validated.property_id,
+                        "property_name": prop.name,
+                        "total_units": total_u,
+                        "occupied_units": occupied_u,
+                        "occupancy_rate": f"{(occupied_u / total_u * 100):.1f}%" if total_u > 0 else "0%",
+                        "progress_logs": progress_history
                     }
-
-                progress_history = []
-                for step in range(1, 6):
-                    pct = step * 20
-                    msg = f"Auditing {prop_row['name']} (ID: {validated.property_id}) - Step {step}/5 ({pct}%)"
-                    progress_history.append({"step": step, "percentage": pct, "message": msg})
-
-                cur.execute("SELECT COUNT(*) FROM units WHERE property_id = ?;", (validated.property_id,))
-                total_u = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM units WHERE property_id = ? AND status = 'occupied';", (validated.property_id,))
-                occupied_u = cur.fetchone()[0]
-                conn.close()
-
-                return {
-                    "status": "success",
-                    "property_id": validated.property_id,
-                    "property_name": prop_row["name"],
-                    "total_units": total_u,
-                    "occupied_units": occupied_u,
-                    "occupancy_rate": f"{(occupied_u / total_u * 100):.1f}%" if total_u > 0 else "0%",
-                    "progress_logs": progress_history
-                }
 
             # Week 3: search_knowledge_base, record_tenant_memory, recall_tenant_memories
             # moved to top-level rag/ and memory/ packages
