@@ -113,9 +113,16 @@ SyncSessionLocal = sessionmaker(
 )
 
 
-# 4. Initialization & Dependency Injection
 async def init_async_db():
     """Create all ORM tables asynchronously."""
+    if not IS_SQLITE:
+        try:
+            async with async_engine.connect() as conn:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+                await conn.commit()
+        except Exception:
+            pass
+
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         if IS_SQLITE:
@@ -126,7 +133,17 @@ async def init_async_db():
 
 def init_sync_db():
     """Create all ORM tables synchronously."""
-    Base.metadata.create_all(bind=sync_engine)
+    if not IS_SQLITE:
+        try:
+            with sync_engine.connect() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+                conn.commit()
+        except Exception:
+            pass
+    try:
+        Base.metadata.create_all(bind=sync_engine)
+    except Exception as e:
+        logger.warning(f"Sync DB metadata creation notice: {e}")
 
 
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:

@@ -28,6 +28,7 @@ from rag.hybrid_rag import HybridSearchEngine
 from rag.agentic_rag import AgenticRAGRouter
 from rag.graph_rag import PropertyPolicyKnowledgeGraph
 from rag.self_rag import SelfRAGVerifier
+from rag.pgvector_rag import pgvector_rag_store
 
 # Memory Subsystem Stores
 from memory.episodic_store import EpisodicStore
@@ -183,6 +184,16 @@ async def chat_stream_endpoint(req: StreamChatRequest, db: AsyncSession = Depend
         rag_context += f"Matched entities: {', '.join(graph_result['matched_entities'])}\n"
         for p in graph_result["paths"]:
             rag_context += f"- {p['source']} --[{p['relation']}]--> {p['target']}\n"
+    elif req.rag_strategy == "pgvector":
+        search_results = pgvector_rag_store.search(
+            query=msg_text,
+            role=req.role,
+            user_tenant_id=req.tenant_id,
+            top_k=3
+        )
+        rag_context = "\n\nPGVECTOR RAG CONTEXT (PostgreSQL HNSW Cosine Search & Permission Isolation):\n"
+        for r in search_results:
+            rag_context += f"- [{r['title']}] (Similarity: {r['similarity']:.2f}): {r['payload'][:200]}\n"
     elif req.rag_strategy == "naive":
         search_results = naive_rag_search(query=msg_text, vector_store=rag_store, top_k=3)
         rag_context = "\n\nNAIVE RAG CONTEXT (Dense Vector Similarity):\n"

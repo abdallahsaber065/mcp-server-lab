@@ -3,6 +3,8 @@ SQLAlchemy 2.0 Declarative ORM Models (db/models.py)
 Cornerstone Realty Group B Master Schema
 """
 
+import os
+import json
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
@@ -198,5 +200,60 @@ class RAGDocument(Base):
     title = Column(String(200), nullable=False)
     category = Column(String(50), default="policy")  # policy, bylaw, standard, engineering
     content = Column(Text, nullable=False)
+    metadata_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+import json
+from sqlalchemy.types import TypeDecorator, Text
+
+try:
+    from pgvector.sqlalchemy import Vector as PgVectorType
+except ImportError:
+    PgVectorType = None
+
+
+class SafeVector(TypeDecorator):
+    """Bulletproof Vector type: uses native PostgreSQL VECTOR(768) when USE_PGVECTOR=1, otherwise JSON Text."""
+    impl = Text
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql" and PgVectorType is not None and os.getenv("USE_PGVECTOR", "0") == "1":
+            return dialect.type_descriptor(PgVectorType(768))
+        return dialect.type_descriptor(Text())
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if dialect.name == "postgresql" and PgVectorType is not None and os.getenv("USE_PGVECTOR", "0") == "1":
+            return value
+        if isinstance(value, (list, tuple)):
+            return json.dumps(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except Exception:
+                return value
+        return value
+
+
+class RagDocumentEmbedding(Base):
+    __tablename__ = "rag_document_embeddings"
+
+    embedding_id = Column(Integer, primary_key=True, autoincrement=True)
+    doc_id = Column(String(64), nullable=True, index=True)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    embedding_model = Column(String(100), default="gemini-embedding-2")
+    embedding = Column(SafeVector, nullable=True)
+    allowed_roles_json = Column(Text, default='["all"]')  # JSON list e.g. ["all"], ["tenant"], ["property_manager"]
+    target_property_id = Column(Integer, nullable=True, index=True)
+    target_tenant_id = Column(Integer, nullable=True, index=True)
     metadata_json = Column(Text, default="{}")
     created_at = Column(DateTime, default=datetime.utcnow)

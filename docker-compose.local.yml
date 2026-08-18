@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: cornerstone_postgres_local
     restart: unless-stopped
     environment:
@@ -33,29 +33,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: cornerstone_api_local
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://cornerstone:cornerstone_secret_pass@postgres:5432/cornerstone_realty
-      - REDIS_URL=redis://:cornerstone_redis_pass@redis:6379/0
-      - JWT_SECRET_KEY=cornerstone_dev_secret_key_change_in_production_991283
-      - JWT_ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=15
-      - REFRESH_TOKEN_EXPIRE_DAYS=7
-    ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
 
 volumes:
   pgdata_local:

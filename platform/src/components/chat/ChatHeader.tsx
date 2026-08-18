@@ -66,6 +66,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             onChange={(e) => onChangeRag(e.target.value)}
             className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer"
           >
+            <option value="pgvector" className="bg-slate-900">PGVector (PostgreSQL HNSW)</option>
             <option value="agentic" className="bg-slate-900">Agentic (Multi-Hop)</option>
             <option value="hybrid" className="bg-slate-900">Hybrid (BM25+RRF)</option>
             <option value="naive" className="bg-slate-900">Naive RAG</option>

@@ -146,7 +146,7 @@ export const ChatStudioPage: React.FC = () => {
 
   // Configuration Selectors
   const [selectedModel, setSelectedModel] = useState('gemini/gemini-3.1-flash-lite');
-  const [selectedRag, setSelectedRag] = useState<'naive' | 'hybrid' | 'agentic' | 'graph'>('agentic');
+  const [selectedRag, setSelectedRag] = useState<'naive' | 'hybrid' | 'agentic' | 'graph' | 'pgvector'>('pgvector');
 
   // Messages & Stream State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
