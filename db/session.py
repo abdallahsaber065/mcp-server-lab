@@ -10,7 +10,11 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker, Session
+from dotenv import load_dotenv
 from db.models import Base
+
+# Automatically load .env file if present
+load_dotenv(override=False)
 
 logger = logging.getLogger("db.session")
 
@@ -80,7 +84,7 @@ else:
     # PostgreSQL production configuration
     async_engine = create_async_engine(
         ASYNC_DATABASE_URL,
-        poolclass=NullPool if os.getenv("TESTING") else None,
+        poolclass=NullPool,
         pool_pre_ping=True,
         pool_recycle=300,
         echo=False

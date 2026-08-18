@@ -9,6 +9,9 @@ from alembic import context
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from db.models import Base
 from db.session import get_db_url
 

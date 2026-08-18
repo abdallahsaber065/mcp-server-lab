@@ -18,6 +18,9 @@ logger = logging.getLogger("mcp_web_app")
 # Add workspace root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from mcp_server.server import CornerstoneMCPServer
 from rag.pipeline import build_and_seed_vector_store
 from rag.naive_rag import naive_rag_search
