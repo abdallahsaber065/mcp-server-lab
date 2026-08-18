@@ -3,13 +3,15 @@ Generic Repository Base Classes (db/repositories/base.py)
 Provides clean async and sync CRUD operations over SQLAlchemy 2.0 ORM models.
 """
 
-from typing import Generic, TypeVar, Type, List, Optional, Any, Dict
-from sqlalchemy import select, update, delete
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
+
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
+
 from db.models import Base
 
-ModelType = TypeVar("ModelType", bound=Base)
+ModelType = TypeVar("ModelType", bound=Any)
 
 
 class BaseRepository(Generic[ModelType]):

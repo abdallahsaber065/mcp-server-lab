@@ -3,11 +3,13 @@ Tool Registry Service (services/tool_registry_service.py)
 Encapsulates runtime dynamic tool permission toggling and MCP list_changed notifications.
 """
 
-from typing import Dict, Any, List
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.tool_binding_repo import ToolBindingRepository, AsyncToolBindingRepository
-from mcp_server.notifications import dispatcher, ToolListChangedNotification
+from sqlalchemy.orm import Session
+
+from db.repositories.tool_binding_repo import AsyncToolBindingRepository, ToolBindingRepository
+from mcp_server.notifications import ToolListChangedNotification, dispatcher
 
 
 class ToolRegistryService:
@@ -28,7 +30,7 @@ class ToolRegistryService:
         tool_name: str,
         is_enabled: bool,
         current_role: str = "property_manager",
-        active_tools: List[str] = None
+        active_tools: Optional[List[str]] = None
     ) -> bool:
         repo = ToolBindingRepository(session)
         success = repo.set_tool_status(agent_id, tool_name, is_enabled)
@@ -48,7 +50,7 @@ class ToolRegistryService:
         tool_name: str,
         is_enabled: bool,
         current_role: str = "property_manager",
-        active_tools: List[str] = None
+        active_tools: Optional[List[str]] = None
     ) -> bool:
         repo = AsyncToolBindingRepository(session)
         success = await repo.set_tool_status(agent_id, tool_name, is_enabled)

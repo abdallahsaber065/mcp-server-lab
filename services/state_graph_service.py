@@ -3,13 +3,15 @@ State Graph Service (services/state_graph_service.py)
 Coordinates State Graph execution, checkpoint persistence, webhook resumes, and HITL decisions.
 """
 
-from typing import Dict, Any, Optional, List
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.checkpoint_repo import CheckpointRepository, AsyncCheckpointRepository
-from state_graph.models import GraphState
+from sqlalchemy.orm import Session
+
+from db.repositories.checkpoint_repo import AsyncCheckpointRepository, CheckpointRepository
 from state_graph.engine import StateGraph
 from state_graph.graphs.lease_flow import build_lease_flow_graph
+from state_graph.models import GraphState
 
 
 class CheckpointerAdapter:

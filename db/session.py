@@ -3,14 +3,16 @@ Async-First Database Session Management & Concurrency Configuration (db/session.
 Supports SQLite (with WAL mode & busy_timeout concurrency) and seamless PostgreSQL production deployment.
 """
 
-import os
 import logging
+import os
 from typing import AsyncGenerator, Generator
-from sqlalchemy import create_engine, event
-from sqlalchemy.pool import NullPool
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker, Session
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
+
 from db.models import Base
 
 # Automatically load .env file if present
@@ -139,11 +141,25 @@ async def init_async_db():
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(_apply_schema_migrations)
         if IS_SQLITE:
             # Set WAL mode asynchronously
             await conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
             await conn.exec_driver_sql("PRAGMA busy_timeout=5000;")
+
+    # Ensure schema migrations are committed
+    try:
+        async with async_engine.connect() as conn:
+            if IS_SQLITE:
+                res = await conn.execute(text("PRAGMA table_info(chat_sessions);"))
+                cols = [r[1] for r in res.fetchall()]
+                if cols and "user_id" not in cols:
+                    await conn.execute(text("ALTER TABLE chat_sessions ADD COLUMN user_id INTEGER;"))
+                    await conn.commit()
+            else:
+                await conn.execute(text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS user_id INTEGER;"))
+                await conn.commit()
+    except Exception as e:
+        logger.debug(f"Async schema migration note: {e}")
 
 
 def init_sync_db():

@@ -3,23 +3,25 @@ MCP Server Database Helpers (mcp_server/db_helpers.py)
 Unified helper layer delegating to SQLAlchemy 2.0 Repositories for PostgreSQL & SQLite concurrency.
 """
 
-import os
-import sys
 import json
-import sqlite3
 import logging
-from typing import Dict, List, Any, Optional
+import os
+import sqlite3
+import sys
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 # Add root path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from db.session import get_sync_db, init_sync_db, SYNC_DATABASE_URL, IS_SQLITE
+from db.models import Lease, MaintenanceRequest, Tenant, Unit
+from db.repositories.chat_repo import ChatRepository
+from db.repositories.maintenance_repo import MaintenanceRepository
 from db.repositories.property_repo import PropertyRepository
 from db.repositories.tenant_repo import TenantRepository
-from db.repositories.maintenance_repo import MaintenanceRepository
-from db.repositories.chat_repo import ChatRepository
 from db.repositories.user_repo import UserRepository
+from db.session import IS_SQLITE, SYNC_DATABASE_URL, get_sync_db, init_sync_db
+from scripts.seed_db import seed_sync
 
 logger = logging.getLogger("mcp.db_helpers")
 
@@ -35,7 +37,7 @@ def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(db_file)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    
+
     # Auto-ensure chat tables exist with role column
     conn.execute("""
         CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -78,7 +80,6 @@ def init_db(reset: bool = False):
         return
     try:
         init_sync_db()
-        from scripts.seed_db import seed_sync
         seed_sync(reset=reset)
         _DB_INITIALIZED = True
     except Exception as e:
@@ -99,7 +100,7 @@ def get_all_chat_sessions() -> List[Dict[str, Any]]:
         return repo.get_all_chat_sessions()
 
 
-def get_chat_messages(session_id: str) -> List[Dict[str, Any]]:
+def get_chat_session_history(session_id: str) -> List[Dict[str, Any]]:
     with next(get_sync_db()) as session:
         repo = ChatRepository(session)
         return repo.get_chat_messages(session_id)
@@ -107,25 +108,27 @@ def get_chat_messages(session_id: str) -> List[Dict[str, Any]]:
 
 def save_chat_message(
     session_id: str,
-    msg_type: str,
-    content: Optional[str] = None,
+    sender: str = "assistant",
+    message_text: str = "",
     tool_name: Optional[str] = None,
     tool_args: Optional[Dict[str, Any]] = None,
     tool_result: Optional[Dict[str, Any]] = None,
     elicitation_payload: Optional[Dict[str, Any]] = None,
-    sse_payload: Optional[str] = None
+    content: Optional[str] = None,
+    msg_type: Optional[str] = None,
+    sse_payload: Optional[Dict[str, Any]] = None
 ) -> int:
     with next(get_sync_db()) as session:
         repo = ChatRepository(session)
         return repo.save_chat_message(
             session_id=session_id,
-            msg_type=msg_type,
-            content=content,
+            msg_type=msg_type or sender,
+            content=content or message_text,
             tool_name=tool_name,
             tool_args=tool_args,
             tool_result=tool_result,
             elicitation_payload=elicitation_payload,
-            sse_payload=sse_payload
+            sse_payload=json.dumps(sse_payload) if sse_payload else None
         )
 
 
@@ -154,17 +157,14 @@ def query_available_units(city: Optional[str] = None, min_beds: Optional[int] = 
         repo = PropertyRepository(session)
         units = repo.query_available_units(property_id=property_id, city=city, max_rent=max_rent)
         if min_beds is not None:
-            units = [u for u in units if u.get("bedrooms", 0) >= min_beds]
+            units = [u for u in units if int(u.get("bedrooms", 0)) >= min_beds]
         return units
 
 
-def query_tenant_lease(email: str) -> Optional[Dict[str, Any]]:
+def query_tenant_lease(email: str) -> Dict[str, Any]:
     with next(get_sync_db()) as session:
         repo = TenantRepository(session)
-        details = repo.get_lease_details(email)
-        if not details.get("found"):
-            return None
-        return details
+        return repo.get_lease_details(email)
 
 
 get_available_units = query_available_units
@@ -172,7 +172,6 @@ get_active_lease_by_email = query_tenant_lease
 
 
 def create_maintenance_record(tenant_id: int, unit_id: int, issue_description: str, priority: str) -> Dict[str, Any]:
-    from db.models import Unit, Tenant, MaintenanceRequest
     with next(get_sync_db()) as session:
         unit = session.get(Unit, unit_id)
         if not unit:
@@ -214,7 +213,6 @@ def create_maintenance_record(tenant_id: int, unit_id: int, issue_description: s
 
 
 def update_lease_terms(lease_id: int, new_rent: float, duration_months: int, signed_off_by_executive: bool = False) -> Dict[str, Any]:
-    from db.models import Lease
     with next(get_sync_db()) as session:
         lease = session.get(Lease, lease_id)
         if not lease:
@@ -234,7 +232,7 @@ def update_lease_terms(lease_id: int, new_rent: float, duration_months: int, sig
             }
 
         lease.monthly_rent = new_rent
-        lease.status = "active"
+        lease.is_active = True
         session.commit()
         session.refresh(lease)
 

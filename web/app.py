@@ -3,15 +3,17 @@ Main Application Entrypoint (web/app.py)
 Modular, decoupled FastAPI gateway routing through dedicated domain routers.
 """
 
+import logging
 import os
 import sys
-import logging
 from contextlib import asynccontextmanager
+
+import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
 # Ensure root workspace is on Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -19,16 +21,16 @@ load_dotenv()
 
 from db.session import init_async_db
 from web.routers import (
+    admin_router,
     auth_router,
-    properties_router,
+    chat_router,
     leases_router,
     maintenance_router,
+    mcp_protocol_router,
+    memory_router,
+    properties_router,
     showcase_router,
     state_graph_router,
-    admin_router,
-    chat_router,
-    memory_router,
-    mcp_protocol_router
 )
 
 logger = logging.getLogger("cornerstone_platform")
@@ -102,5 +104,4 @@ async def serve_spa(request: Request, full_path: str):
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run("web.app:app", host="0.0.0.0", port=8000, reload=True)

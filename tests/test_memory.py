@@ -8,18 +8,20 @@ Verifies:
 """
 
 from datetime import datetime, timezone
+
 import pytest
-from memory.stm import ShortTermMemory
-from memory.router import MemoryRouter, MemoryRoutingDecision
+
+from memory.consolidation import SemanticConsolidationEngine, SemanticFact, SemanticMemoryStore
 from memory.episodic_store import EpisodicStore
-from memory.consolidation import SemanticMemoryStore, SemanticConsolidationEngine, SemanticFact
+from memory.router import MemoryRouter, MemoryRoutingDecision
+from memory.stm import ShortTermMemory
 
 
 def test_stm_scratchpad_decoupling():
     """Verify pruning message transcript NEVER touches or destroys the scratchpad."""
     stm = ShortTermMemory(max_turns=3)
     stm.update_scratchpad(plan="Audit Cairo commercial leases", subgoal="Fetch Unit 402 details")
-    
+
     # Add 5 messages (exceeding max_turns=3)
     for i in range(5):
         stm.add_message("user", f"Message {i}")
@@ -28,7 +30,7 @@ def test_stm_scratchpad_decoupling():
     evicted = stm.prune_to_turn_limit()
     assert len(evicted) == 2
     assert len(stm.get_context()) == 3
-    
+
     # Assert scratchpad remains 100% intact
     scratchpad = stm.get_scratchpad()
     assert scratchpad["current_plan"] == "Audit Cairo commercial leases"

@@ -2,12 +2,14 @@
 Property & Unit Repository (db/repositories/property_repo.py)
 """
 
-from typing import List, Optional, Dict, Any
-from sqlalchemy import select, and_
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from db.models import Property, Unit
-from db.repositories.base import BaseRepository, AsyncBaseRepository
+from db.repositories.base import AsyncBaseRepository, BaseRepository
 
 
 class PropertyRepository(BaseRepository[Property]):
@@ -22,7 +24,7 @@ class PropertyRepository(BaseRepository[Property]):
     ) -> List[Dict[str, Any]]:
         """Query available units matching property/city/budget constraints."""
         stmt = select(Unit, Property).join(Property, Unit.property_id == Property.property_id)
-        
+
         filters = [Unit.status == "available"]
         if property_id is not None:
             filters.append(Unit.property_id == property_id)
@@ -61,7 +63,7 @@ class AsyncPropertyRepository(AsyncBaseRepository[Property]):
         max_rent: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         stmt = select(Unit, Property).join(Property, Unit.property_id == Property.property_id)
-        
+
         filters = [Unit.status == "available"]
         if property_id is not None:
             filters.append(Unit.property_id == property_id)

@@ -2,16 +2,19 @@
 Authentication & JWT Token Service (services/auth_service.py)
 """
 
+import hashlib
 import os
 import uuid
-import hashlib
-import jwt
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
-from sqlalchemy.orm import Session
+from typing import Any, Dict, Optional
+
+import bcrypt
+import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from db.models import Tenant
-from db.repositories.user_repo import UserRepository, AsyncUserRepository
+from db.repositories.user_repo import AsyncUserRepository, UserRepository
 from services.cache_service import cache_service
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "cornerstone_dev_secret_key_change_in_production_991283")
@@ -27,7 +30,6 @@ class AuthService:
     def hash_password(password: str) -> str:
         """Hash a password using bcrypt if available, else SHA256-PBKDF2."""
         try:
-            import bcrypt
             pwd_bytes = password.encode("utf-8")
             salt = bcrypt.gensalt()
             return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
@@ -43,7 +45,6 @@ class AuthService:
             return False
         try:
             if hashed_password.startswith("$2b$") or hashed_password.startswith("$2a$"):
-                import bcrypt
                 return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
             elif hashed_password.startswith("pbkdf2$"):
                 parts = hashed_password.split("$")

@@ -2,15 +2,17 @@
 FastAPI Dependencies & Security Guards (web/deps.py)
 """
 
-from typing import Optional, List, Callable
+from typing import Callable, List, Optional
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.session import get_async_db
+
 from db.models import Tenant
 from db.repositories.user_repo import AsyncUserRepository
+from db.session import get_async_db
 from services.auth_service import AuthService
-from services.cache_service import cache_service, CacheService
+from services.cache_service import CacheService, cache_service
 
 bearer_scheme = HTTPBearer(auto_error=False)
 

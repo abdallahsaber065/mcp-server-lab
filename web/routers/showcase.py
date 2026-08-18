@@ -3,11 +3,13 @@ Public Showcase & System Health Router (web/routers/showcase.py)
 Provides public benchmarks, architectural trade-offs, and MCP protocol status.
 """
 
-import os
 import json
+import os
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 from fastapi import APIRouter
+
 from mcp_server.server import CornerstoneMCPServer
 
 router = APIRouter(prefix="/api/showcase", tags=["Public Showcase"])
@@ -46,7 +48,7 @@ async def get_system_stats():
     tools = mcp_server.list_tools(role="executive_admin")
     resources = mcp_server.list_resources()
     prompts = mcp_server.list_prompts()
-    
+
     return {
         "status": "success",
         "system": {

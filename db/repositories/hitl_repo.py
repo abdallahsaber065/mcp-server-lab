@@ -2,15 +2,17 @@
 HITL Task Repository (db/repositories/hitl_repo.py)
 """
 
-import uuid
 import json
+import uuid
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from db.models import HITLTask
-from db.repositories.base import BaseRepository, AsyncBaseRepository
+from db.repositories.base import AsyncBaseRepository, BaseRepository
 
 
 class HITLRepository(BaseRepository[HITLTask]):

@@ -2,13 +2,15 @@
 Maintenance Request Repository (db/repositories/maintenance_repo.py)
 """
 
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from db.models import MaintenanceRequest, Unit
-from db.repositories.base import BaseRepository, AsyncBaseRepository
+from db.repositories.base import AsyncBaseRepository, BaseRepository
 
 
 class MaintenanceRepository(BaseRepository[MaintenanceRequest]):

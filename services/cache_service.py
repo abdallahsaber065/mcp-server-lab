@@ -3,11 +3,13 @@ Async Redis Cache Service with In-Memory Fallback & Namespacing (services/cache_
 Provides high-performance distributed caching, token revocation blacklist, and rate limiting with key prefixing for shared Redis environments.
 """
 
-import os
 import json
-import time
 import logging
-from typing import Optional, Any, Dict
+import os
+import time
+from typing import Any, Dict, Optional
+
+import redis.asyncio as aioredis
 
 logger = logging.getLogger("services.cache")
 
@@ -35,7 +37,6 @@ class CacheService:
         """Attempt to connect to Redis, or activate in-memory fallback."""
         if self.redis_url:
             try:
-                import redis.asyncio as aioredis
                 self._redis = aioredis.from_url(
                     self.redis_url,
                     encoding="utf-8",
@@ -59,10 +60,13 @@ class CacheService:
         scoped = self._scoped_key(key)
         if self._is_redis_available and self._redis:
             try:
-                return await self._redis.get(scoped)
+                val = await self._redis.get(scoped)
+                if isinstance(val, bytes):
+                    return val.decode("utf-8")
+                return val
             except Exception:
                 pass
-        
+
         # In-memory fallback with TTL check
         item = self._in_memory.get(scoped)
         if item:

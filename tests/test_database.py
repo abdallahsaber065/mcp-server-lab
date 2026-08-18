@@ -3,6 +3,8 @@ import sqlite3
 
 import pytest
 
+from mcp_server.prompts.templates import draft_lease_notice
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_PATH = os.path.join(BASE_DIR, "db", "schema.sql")
 SEED_PATH = os.path.join(BASE_DIR, "db", "seed.sql")
@@ -83,8 +85,6 @@ def test_unique_unit_per_property(in_memory_db):
 
 
 def test_lease_notice_template():
-    from mcp_server.prompts.templates import draft_lease_notice
-
     prompt = draft_lease_notice(
         tenant_name="Amr Hassan",
         property_name="Cornerstone Heights",

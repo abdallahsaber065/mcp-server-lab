@@ -2,10 +2,12 @@
 HITL Service (services/hitl_service.py)
 """
 
-from typing import List, Dict, Any, Optional
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.hitl_repo import HITLRepository, AsyncHITLRepository
+from sqlalchemy.orm import Session
+
+from db.repositories.hitl_repo import AsyncHITLRepository, HITLRepository
 
 
 class HITLService:

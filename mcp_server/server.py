@@ -1,35 +1,38 @@
+import json
 import os
 import sys
-import json
 import time
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from pydantic import ValidationError
 
 # Add root path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from db.models import Property, Unit
+from db.session import get_sync_db, init_sync_db
 from mcp_server.db_helpers import (
-    init_db, query_available_units, query_tenant_lease,
-    create_maintenance_record, update_lease_terms, get_db_connection
+    create_maintenance_record,
+    get_db_connection,
+    init_db,
+    query_available_units,
+    query_tenant_lease,
+    update_lease_terms,
 )
-from mcp_server.schemas import (
-    QueryUnitsArgs, LookupLeaseArgs, MaintenanceRequestArgs,
-    ModifyLeaseArgs, BatchAuditArgs
-)
+
 # Week 3: rag/ and memory/ moved to top-level packages (rag/, memory/)
 # Old mcp_server/rag and mcp_server/memory removed — see Week 3 instruction files
-
-from mcp_server.notifications import dispatcher, ToolListChangedNotification
-from db.session import get_sync_db, init_sync_db
-from services.property_service import PropertyService
+from mcp_server.notifications import ToolListChangedNotification, dispatcher
+from mcp_server.schemas import BatchAuditArgs, LookupLeaseArgs, MaintenanceRequestArgs, ModifyLeaseArgs, QueryUnitsArgs
 from services.lease_service import LeaseService
 from services.maintenance_service import MaintenanceService
+from services.property_service import PropertyService
 from services.tool_registry_service import ToolRegistryService
 
 
 class CornerstoneMCPServer:
     """Cornerstone Realty Group MCP Server implementing protocol concerns."""
-    
+
     def __init__(self):
         self.name = "cornerstone-realty-mcp"
         self.version = "1.0.0"
@@ -77,7 +80,7 @@ class CornerstoneMCPServer:
     def list_tools(self, role: Optional[str] = None, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return available tools filtered by authenticated user role and runtime agent bindings."""
         active_role = role or self.current_user_role
-        
+
         all_tools = [
             {
                 "name": "lookup_available_units",
@@ -95,7 +98,7 @@ class CornerstoneMCPServer:
                 "inputSchema": MaintenanceRequestArgs.model_json_schema()
             },
         ]
-        
+
         # Role-gated write tools (Demonstrates Notifications & defensive auth)
         if active_role in ("property_manager", "executive_admin"):
             all_tools.append({
@@ -212,14 +215,14 @@ class CornerstoneMCPServer:
 
             elif name == "modify_lease_terms":
                 validated = ModifyLeaseArgs(**arguments)
-                
+
                 res = update_lease_terms(
                     lease_id=validated.lease_id,
                     new_rent=validated.new_monthly_rent,
                     duration_months=validated.duration_months,
                     signed_off_by_executive=validated.executive_approval_given
                 )
-                
+
                 if res.get("requires_elicitation"):
                     return {
                         "status": "elicitation_required",
@@ -233,7 +236,6 @@ class CornerstoneMCPServer:
 
             elif name == "run_property_audit":
                 validated = BatchAuditArgs(**arguments)
-                from db.models import Property, Unit
                 with next(get_sync_db()) as session:
                     prop = session.get(Property, validated.property_id)
                     if not prop:

@@ -8,11 +8,12 @@ Implements official Google Gemini Embeddings specifications:
 - Offline deterministic normalized vector generator for zero-crash testing
 """
 
-import os
-import math
 import hashlib
 import logging
+import math
+import os
 from typing import List, Optional, Union
+
 import litellm
 
 logger = logging.getLogger("gemini_embedding_engine")

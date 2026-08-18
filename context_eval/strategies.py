@@ -7,8 +7,8 @@ Implements all four strategies required by the lab rubric:
   4. Zone-Based Pruning: 4 progressive degradation zones.
 """
 
-from typing import Any, Dict, List, Optional
 import copy
+from typing import Any, Dict, List, Optional
 
 
 def apply_sliding_window(messages: List[Dict[str, Any]], keep_recent_turns: int = 10) -> List[Dict[str, Any]]:
@@ -34,7 +34,7 @@ def apply_observation_masking(messages: List[Dict[str, Any]], keep_recent_tools:
 
 
 def apply_recursive_summarization(
-    messages: List[Dict[str, Any]], 
+    messages: List[Dict[str, Any]],
     keep_recent: int = 6,
     summary_fn=None
 ) -> List[Dict[str, Any]]:
@@ -91,7 +91,7 @@ def apply_zone_based_pruning(messages: List[Dict[str, Any]], zone_counts: Option
 
     # Summarize Zone 3
     z3_summary_bullets = [
-        f"- {m.get('role')}: {m.get('content')[:60]}" 
+        f"- {m.get('role')}: {m.get('content')[:60]}"
         for m in zone3_older if len(m.get("content", "")) > 10
     ]
     z3_header = {

@@ -4,9 +4,9 @@ Persists timestamped, context-rich historical events and conversations.
 Answers: What happened? Who was involved? When did it happen? Why did it happen?
 """
 
-from datetime import datetime, timezone
 import json
 import sqlite3
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -63,7 +63,7 @@ class EpisodicStore:
         last_id = cursor.lastrowid
         if not self._shared_conn:
             conn.close()
-        return last_id
+        return int(last_id or 0)
 
     def query_episodes(self, entity_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
         conn = self._get_connection()

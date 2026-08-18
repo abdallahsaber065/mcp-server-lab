@@ -3,10 +3,11 @@ Unit Tests for Authentication, JWT Tokens & Role Security (tests/test_auth.py)
 """
 
 import pytest
-from httpx import AsyncClient, ASGITransport
-from web.app import app
+from httpx import ASGITransport, AsyncClient
+
 from services.auth_service import AuthService
 from services.cache_service import cache_service
+from web.app import app
 
 
 @pytest.mark.anyio

@@ -2,12 +2,14 @@
 Unit Tests for DAG Task Decomposition & Dynamic Execution (tests/test_planning_dag.py)
 """
 
-import pytest
 from unittest.mock import MagicMock
-from planning.models import Plan, Task
+
+import pytest
+
+from agent.planning_agent import PlanningAgent
 from planning.decomposition import decompose_goal
 from planning.dynamic_decomposition import dynamic_decomposition
-from agent.planning_agent import PlanningAgent
+from planning.models import Plan, Task
 
 
 def test_dag_acyclicity_and_topological_sort():
@@ -35,7 +37,7 @@ def test_dag_cycle_rejection():
 def test_planning_agent_subtask_routing():
     mock_llm = MagicMock()
     agent = PlanningAgent(llm=mock_llm, mode="static")
-    
+
     assert agent.route_subtask("Rank emergency plumbing vendors by speed") == "ToT"
     assert agent.route_subtask("Verify Egyptian Law 4/1996 SLA compliance") == "LATS"
     assert agent.route_subtask("Calculate maintenance budget line items") == "PS"
@@ -49,7 +51,7 @@ def test_dynamic_decomposition_divergence_simulation():
         MagicMock(done=True, next_task=""),
     ]
     mock_llm.invoke.return_value.content = "Sub-task executed successfully."
-    
+
     history = dynamic_decomposition("Nile Tower burst", mock_llm, max_steps=3)
     assert len(history) == 2
     assert "Re-route" in history[1][0]

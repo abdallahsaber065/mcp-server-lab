@@ -4,11 +4,12 @@ Reads structured JSON seed files from db/seeds/ and populates the database using
 Supports sync and async seeding modes with --reset flag.
 """
 
-import os
-import sys
-import json
 import argparse
 import asyncio
+import json
+import os
+import sys
+from datetime import datetime
 from pathlib import Path
 
 # Add project root to sys.path
@@ -17,14 +18,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
+from sqlalchemy import select, text
+
 from db.models import (
-    Base, Property, Unit, Tenant, Lease, MaintenanceRequest,
-    AgentToolBinding, RAGDocument
+    AgentToolBinding,
+    Base,
+    Lease,
+    MaintenanceRequest,
+    Property,
+    RAGDocument,
+    RagDocumentEmbedding,
+    Tenant,
+    Unit,
 )
 from db.session import (
-    SyncSessionLocal, AsyncSessionLocal, init_sync_db, init_async_db,
-    sync_engine, async_engine
+    IS_SQLITE,
+    AsyncSessionLocal,
+    SyncSessionLocal,
+    async_engine,
+    init_async_db,
+    init_sync_db,
+    sync_engine,
 )
+from memory.consolidation import SemanticConsolidationEngine, SemanticMemoryStore
+from memory.episodic_store import EpisodicStore
+from rag.embedding_engine import embedding_engine
+from services.auth_service import AuthService
 
 SEEDS_DIR = Path(__file__).resolve().parent.parent / "db" / "seeds"
 
@@ -69,7 +88,6 @@ def seed_sync(reset: bool = False):
         session.commit()
         print(f"✅ Seeded {len(units_data)} Units.")
         # 3. Tenants with Hashed Passwords
-        from services.auth_service import AuthService
         tenants_data = load_json("tenants.json")
         for item in tenants_data:
             d = dict(item)
@@ -102,8 +120,6 @@ def seed_sync(reset: bool = False):
         for item in maint_data:
             existing = session.get(MaintenanceRequest, item["request_id"])
             if not existing:
-                # convert submitted_at to datetime if string
-                from datetime import datetime
                 d = dict(item)
                 if "submitted_at" in d and isinstance(d["submitted_at"], str):
                     d["submitted_at"] = datetime.fromisoformat(d["submitted_at"])
@@ -136,8 +152,6 @@ def seed_sync(reset: bool = False):
 
         # 8. Memory Subsystem (Episodic & Semantic Stores)
         try:
-            from memory.episodic_store import EpisodicStore
-            from memory.consolidation import SemanticMemoryStore, SemanticConsolidationEngine
             ep_store = EpisodicStore(db_path="db/episodic_memory.db")
             sem_store = SemanticMemoryStore(db_path="db/semantic_memory.db")
             engine = SemanticConsolidationEngine(ep_store, sem_store)
@@ -163,9 +177,6 @@ def seed_sync(reset: bool = False):
 
         # 9. PGVector RAG Document Embeddings Seed
         try:
-            from rag.embedding_engine import embedding_engine
-            from db.models import RagDocumentEmbedding
-
             for doc in rag_data:
                 existing_emb = session.query(RagDocumentEmbedding).filter_by(doc_id=doc["doc_id"]).first()
                 if not existing_emb:
@@ -186,9 +197,7 @@ def seed_sync(reset: bool = False):
             print(f"⚠️ PGVector embedding seeding notice: {pgv_err}")
 
         # Synchronize PostgreSQL auto-increment sequences after explicit PK insertions
-        from db.session import IS_SQLITE
         if not IS_SQLITE:
-            from sqlalchemy import text
             seq_tables = [
                 ("properties", "property_id"),
                 ("units", "unit_id"),
@@ -274,7 +283,6 @@ async def seed_async(reset: bool = False):
         for item in maint_data:
             existing = await session.get(MaintenanceRequest, item["request_id"])
             if not existing:
-                from datetime import datetime
                 d = dict(item)
                 if "submitted_at" in d and isinstance(d["submitted_at"], str):
                     d["submitted_at"] = datetime.fromisoformat(d["submitted_at"])
@@ -307,10 +315,6 @@ async def seed_async(reset: bool = False):
 
         # PGVector RAG Document Embeddings Seed
         try:
-            from rag.embedding_engine import embedding_engine
-            from db.models import RagDocumentEmbedding
-            from sqlalchemy import select
-
             for doc in rag_data:
                 stmt = select(RagDocumentEmbedding).where(RagDocumentEmbedding.doc_id == doc["doc_id"])
                 res = await session.scalars(stmt)

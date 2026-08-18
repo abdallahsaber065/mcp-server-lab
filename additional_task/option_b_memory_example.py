@@ -10,11 +10,9 @@ database — no embedding model, no API key required.
 
 from datetime import datetime, timezone
 from typing import Literal, Optional
-from pydantic import BaseModel, Field, ConfigDict
 
 from keyword_search import KeywordStore
-
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # Store: same upsert()/query() shape you'd use with a vector DB,
 

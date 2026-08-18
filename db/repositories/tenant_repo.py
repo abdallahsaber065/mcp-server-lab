@@ -2,12 +2,14 @@
 Tenant & Lease Repository (db/repositories/tenant_repo.py)
 """
 
-from typing import Optional, Dict, Any, List
-from sqlalchemy import select, and_
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import Tenant, Lease, Unit, Property
-from db.repositories.base import BaseRepository, AsyncBaseRepository
+from sqlalchemy.orm import Session
+
+from db.models import Lease, Property, Tenant, Unit
+from db.repositories.base import AsyncBaseRepository, BaseRepository
 
 
 class TenantRepository(BaseRepository[Tenant]):

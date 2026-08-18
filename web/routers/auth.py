@@ -3,13 +3,15 @@ Authentication Router (web/routers/auth.py)
 """
 
 import time
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.session import get_async_db
+
 from db.models import Tenant
 from db.repositories.user_repo import AsyncUserRepository
+from db.session import get_async_db
 from services.auth_service import AuthService
 from services.cache_service import cache_service
 from web.deps import get_current_user
@@ -77,6 +79,11 @@ async def refresh_tokens(req: RefreshRequest, db: AsyncSession = Depends(get_asy
         )
 
     user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload."
+        )
     repo = AsyncUserRepository(db)
     user = await repo.get_by_id(int(user_id))
     if not user or user.refresh_token != req.refresh_token:

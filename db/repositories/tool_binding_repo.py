@@ -2,13 +2,15 @@
 Agent Tool Binding Repository (db/repositories/tool_binding_repo.py)
 """
 
-from typing import Dict, List, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from db.models import AgentToolBinding
-from db.repositories.base import BaseRepository, AsyncBaseRepository
+from db.repositories.base import AsyncBaseRepository, BaseRepository
 
 
 class ToolBindingRepository(BaseRepository[AgentToolBinding]):

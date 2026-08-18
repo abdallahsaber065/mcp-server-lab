@@ -3,10 +3,12 @@ State Graph Execution Engine (state_graph/engine.py)
 Async-First state machine runner supporting cycles, asynchronous waits, HITL pauses, and durable checkpoints.
 """
 
-import inspect
 import asyncio
+import concurrent.futures
+import inspect
 import logging
-from typing import Dict, Any, Callable, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
+
 from state_graph.models import GraphState, NodeResult
 
 logger = logging.getLogger("state_graph.engine")
@@ -123,8 +125,7 @@ class StateGraph:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # In an already running loop (e.g. Jupyter or nested async), use nest_asyncio or thread
-                import concurrent.futures
+                # In an already running loop (e.g. Jupyter or nested async), use ThreadPoolExecutor
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(asyncio.run, self.arun(initial_state))
                     return future.result()

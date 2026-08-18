@@ -16,7 +16,7 @@ def plan_and_solve(question: str, llm: BaseChatModel) -> str:
 
 First analyze the operational requirements and devise a structured plan. Then output the forward-looking action schedule, timeline milestones, and vendor priorities step by step."""),
     ], temperature=0.2)
-    
+
     if not isinstance(response.content, str) or not response.content.strip():
         raise RuntimeError("The chat model returned an empty or unsupported response")
     return response.content.strip()

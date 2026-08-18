@@ -7,8 +7,10 @@ Validates:
 4. Full cosine similarity ranking and integration with FastAPI chat stream
 """
 
-import pytest
 import math
+
+import pytest
+
 from rag.embedding_engine import GeminiEmbeddingEngine
 from rag.pgvector_rag import PgVectorRAGStore
 

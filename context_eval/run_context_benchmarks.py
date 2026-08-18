@@ -11,11 +11,12 @@ saves results to context_eval/context_benchmark_results.json.
 
 import json
 import time
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from context_eval.strategies import (
-    apply_sliding_window,
     apply_observation_masking,
     apply_recursive_summarization,
+    apply_sliding_window,
     apply_zone_based_pruning,
 )
 from context_eval.test_suite import generate_long_context_transcript
@@ -34,7 +35,7 @@ def evaluate_strategy(strategy_name: str, strategy_fn) -> Dict[str, Any]:
     num_trials = 10
     for v in range(1, num_trials + 1):
         transcript, target_fact = generate_long_context_transcript(variation_id=v)
-        
+
         # Apply pruning strategy
         t0 = time.time()
         pruned_msgs = strategy_fn(transcript)
@@ -48,7 +49,7 @@ def evaluate_strategy(strategy_name: str, strategy_fn) -> Dict[str, Any]:
         # Check if target fact survived pruning
         target_tokens = target_fact.split()[:4]
         survived = any(all(w.lower() in m.get("content", "").lower() for w in target_tokens) for m in pruned_msgs)
-        
+
         if survived:
             correct_recalls += 1
             out_tokens = 180 + (len(target_fact) // 4)

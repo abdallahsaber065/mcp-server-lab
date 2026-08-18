@@ -6,13 +6,15 @@ with full PostgreSQL and SQLite compatibility.
 
 import json
 import uuid
-from typing import List, Optional, Dict, Any
 from datetime import datetime
-from sqlalchemy import select, delete, update
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import ChatSession, ChatMessage
-from db.repositories.base import BaseRepository, AsyncBaseRepository
+from sqlalchemy.orm import Session
+
+from db.models import ChatMessage, ChatSession
+from db.repositories.base import AsyncBaseRepository, BaseRepository
 
 
 class ChatRepository(BaseRepository[ChatSession]):
@@ -227,14 +229,17 @@ class AsyncChatRepository(AsyncBaseRepository[ChatSession]):
         tool_args: Optional[Dict[str, Any]] = None,
         tool_result: Optional[Dict[str, Any]] = None,
         elicitation_payload: Optional[Dict[str, Any]] = None,
-        sse_payload: Optional[str] = None
+        sse_payload: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> int:
         existing = await self.session.get(ChatSession, session_id)
         if not existing:
             init_title = (content.strip()[:40] + ("..." if len(content.strip()) > 40 else "")) if (msg_type == "user" and content) else "New conversation"
-            await self.create_chat_session(session_id=session_id, title=init_title)
+            await self.create_chat_session(session_id=session_id, title=init_title, user_id=user_id)
         else:
             existing.updated_at = datetime.utcnow()
+            if user_id is not None and existing.user_id is None:
+                existing.user_id = user_id
             if msg_type == "user" and content and (not existing.title or existing.title in ["محادثة جديدة", "New conversation", "New Conversation"]):
                 existing.title = content.strip()[:40] + ("..." if len(content.strip()) > 40 else "")
 

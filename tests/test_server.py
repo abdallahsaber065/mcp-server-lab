@@ -1,11 +1,13 @@
+import json
 import os
 import sys
 import tempfile
+
 import pytest
-import json
 
 from mcp_server.db_helpers import init_db
 from mcp_server.server import CornerstoneMCPServer
+
 
 @pytest.fixture(scope="module")
 def server():

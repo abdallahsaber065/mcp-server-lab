@@ -2,10 +2,12 @@
 Failure Ticket Service (services/ticket_service.py)
 """
 
-from typing import List, Dict, Any, Optional
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.ticket_repo import TicketRepository, AsyncTicketRepository
+from sqlalchemy.orm import Session
+
+from db.repositories.ticket_repo import AsyncTicketRepository, TicketRepository
 
 
 class TicketService:

@@ -1,6 +1,7 @@
 """Hybrid Search: Vector Similarity + BM25 Keyword Search with Reciprocal Rank Fusion (RRF)."""
-from typing import Dict, Any, List, Optional
 import re
+from typing import Any, Dict, List, Optional
+
 from rag.vector_store import VectorStore
 
 

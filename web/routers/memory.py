@@ -3,18 +3,19 @@ Memory Router (web/routers/memory.py)
 Handles tenant memory queries, event recording, router demos, and semantic consolidation.
 """
 
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
 
-from db.session import get_async_db
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models import Tenant
-from web.deps import get_current_user
+from db.session import get_async_db
+from memory.consolidation import SemanticConsolidationEngine, SemanticMemoryStore
 from memory.episodic_store import EpisodicStore
-from memory.consolidation import SemanticMemoryStore, SemanticConsolidationEngine
 from memory.router import MemoryRouter
+from web.deps import get_current_user
 
 router = APIRouter(prefix="/api/memory", tags=["Memory"])
 
@@ -66,10 +67,9 @@ async def record_memory(req: dict):
     """Route an event via MemoryRouter, persist to EpisodicStore, and trigger semantic consolidation."""
     tenant_id = req.get("tenant_id", 1)
     event_text = req.get("event_summary", "")
-    decision = memory_router.route_information(
-        content=event_text,
-        entity_id=f"tenant_{tenant_id}",
-        session_id=req.get("session_id", "web_session")
+    decision = memory_router.evaluate_item(
+        {"content": event_text, "role": "user"},
+        entity_id=f"tenant_{tenant_id}"
     )
     consolidation_result = consolidation_engine.run_periodic_consolidation(subject=f"tenant_{tenant_id}")
     return {

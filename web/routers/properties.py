@@ -2,13 +2,15 @@
 Properties & Units Router (web/routers/properties.py)
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from db.session import get_async_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models import Property, Unit
 from db.repositories.property_repo import AsyncPropertyRepository
+from db.session import get_async_db
 from services.cache_service import cache_service
 
 router = APIRouter(prefix="/api/properties", tags=["Properties"])

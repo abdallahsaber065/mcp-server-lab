@@ -2,10 +2,12 @@
 Maintenance Service (services/maintenance_service.py)
 """
 
-from typing import Dict, Any, Optional
-from sqlalchemy.orm import Session
+from typing import Any, Dict, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.maintenance_repo import MaintenanceRepository, AsyncMaintenanceRepository
+from sqlalchemy.orm import Session
+
+from db.repositories.maintenance_repo import AsyncMaintenanceRepository, MaintenanceRepository
 
 
 class MaintenanceService:

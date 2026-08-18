@@ -3,36 +3,35 @@ Chat Router (web/routers/chat.py)
 Handles chat session lifecycle, multi-turn message persistence, SSE agent streaming, and elicitation.
 """
 
-import json
-import uuid
 import asyncio
+import json
 import logging
+import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.session import get_async_db
+from agent.planning_agent import PlanningAgent
+from db.models import ChatMessage, ChatSession
 from db.repositories.chat_repo import AsyncChatRepository
-from db.models import ChatSession, ChatMessage
-from web.llm_engine import MCPLLMEngine
-from web.services.prompt_builder import build_system_prompt
+from db.session import get_async_db
 from mcp_server.server import CornerstoneMCPServer
-
-# RAG Subsystem Engines
-from rag.pipeline import build_and_seed_vector_store
-from rag.naive_rag import naive_rag_search
-from rag.hybrid_rag import HybridSearchEngine
+from memory.consolidation import SemanticMemoryStore
+from memory.episodic_store import EpisodicStore
 from rag.agentic_rag import AgenticRAGRouter
 from rag.graph_rag import PropertyPolicyKnowledgeGraph
-from rag.self_rag import SelfRAGVerifier
+from rag.hybrid_rag import HybridSearchEngine
+from rag.naive_rag import naive_rag_search
 from rag.pgvector_rag import pgvector_rag_store
-
-# Memory Subsystem Stores
-from memory.episodic_store import EpisodicStore
-from memory.consolidation import SemanticMemoryStore
+from rag.pipeline import build_and_seed_vector_store
+from rag.self_rag import SelfRAGVerifier
+from web.deps import get_optional_user
+from web.llm_engine import MCPLLMEngine, create_langchain_llm
+from web.services.prompt_builder import build_system_prompt
 
 logger = logging.getLogger("mcp_chat_router")
 
@@ -92,7 +91,6 @@ class ElicitationResponse(BaseModel):
 @router.get("/chats")
 async def list_chats(request: Request, db: AsyncSession = Depends(get_async_db)):
     """List chat sessions for the currently authenticated user (scoped by JWT)."""
-    from web.deps import get_optional_user
     user = await get_optional_user(request, db)
     user_id = user.tenant_id if user else None
     repo = AsyncChatRepository(db)
@@ -102,7 +100,6 @@ async def list_chats(request: Request, db: AsyncSession = Depends(get_async_db))
 @router.post("/chats")
 async def create_chat(req: CreateSessionRequest, request: Request, db: AsyncSession = Depends(get_async_db)):
     """Create a new persistent chat session in the database, owned by the authenticated user."""
-    from web.deps import get_optional_user
     user = await get_optional_user(request, db)
     user_id = user.tenant_id if user else None
     session_id = f"session_{uuid.uuid4().hex[:12]}"
@@ -160,7 +157,7 @@ async def chat_stream_endpoint(req: StreamChatRequest, db: AsyncSession = Depend
 
     # Save user message to database (auto-renames default session title)
     await repo.update_chat_session_role(req.session_id, req.role)
-    await repo.save_chat_message(session_id=req.session_id, msg_type="user", content=msg_text)
+    await repo.save_chat_message(session_id=req.session_id, msg_type="user", content=msg_text, user_id=req.tenant_id)
 
     # Build dynamic, persona-grounded system prompt
     system_prompt = build_system_prompt(
@@ -238,8 +235,6 @@ async def chat_stream_endpoint(req: StreamChatRequest, db: AsyncSession = Depend
         # Step 2: Planning Agent Execution (if classified as PLANNING)
         if intent_res["intent"] == "PLANNING":
             try:
-                from agent.planning_agent import PlanningAgent
-                from web.llm_engine import create_langchain_llm
                 planning_llm = create_langchain_llm(req.model or "gemini/gemini-3.1-flash-lite")
                 agent = PlanningAgent(llm=planning_llm, mode="dynamic")
                 agent.environment.mode = "grounded"

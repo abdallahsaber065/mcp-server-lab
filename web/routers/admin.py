@@ -2,16 +2,18 @@
 Admin Operations Router (web/routers/admin.py)
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import RAGDocument, Tenant
 from db.session import get_async_db
-from db.models import Tenant, RAGDocument
-from services.tool_registry_service import ToolRegistryService
+from mcp_server.server import CornerstoneMCPServer
 from services.hitl_service import HITLService
 from services.ticket_service import TicketService
-from mcp_server.server import CornerstoneMCPServer
+from services.tool_registry_service import ToolRegistryService
 from web.deps import require_roles
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Operations"])
@@ -82,7 +84,7 @@ async def resolve_hitl_task(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Resolve an HITL review task and unblock state graph."""
-    success = await HITLService.aresolve_task(db, task_id, req.decision, req.notes, req.decided_by)
+    success = await HITLService.aresolve_task(db, task_id, req.decision, req.notes or "", req.decided_by or "Admin")
     return {"status": "success", "task_id": task_id, "decision": req.decision}
 
 

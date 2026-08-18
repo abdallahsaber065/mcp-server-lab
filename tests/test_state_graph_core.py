@@ -2,12 +2,14 @@
 Unit Tests for Async-First State Graph Core Engine & Graph 1 (tests/test_state_graph_core.py)
 """
 
-import pytest
 import asyncio
-from state_graph.models import GraphState, NodeResult
+
+import pytest
+
+from db.session import IS_SQLITE, init_async_db, init_sync_db
 from state_graph.engine import StateGraph
 from state_graph.graphs.lease_flow import build_lease_flow_graph
-from db.session import init_async_db, init_sync_db, IS_SQLITE
+from state_graph.models import GraphState, NodeResult
 
 
 def test_db_session_initialization():

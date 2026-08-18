@@ -3,10 +3,12 @@ Lease Service (services/lease_service.py)
 Encapsulates tenant and lease domain operations and discount policy evaluation.
 """
 
-from typing import Dict, Any, Optional
-from sqlalchemy.orm import Session
+from typing import Any, Dict, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.tenant_repo import TenantRepository, AsyncTenantRepository
+from sqlalchemy.orm import Session
+
+from db.repositories.tenant_repo import AsyncTenantRepository, TenantRepository
 
 MAX_MANAGER_DISCOUNT_PERCENT = 15.0
 EXECUTIVE_APPROVAL_RENT_THRESHOLD = 40000.0

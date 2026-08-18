@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from typing import Any
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .models import Plan
@@ -48,7 +48,7 @@ class GeneratedPlan(BaseModel):
 
 
 def decompose_goal(goal: str, llm: BaseChatModel) -> Plan:
-    generated = llm.with_structured_output(
+    generated: Any = llm.with_structured_output(
         GeneratedPlan,
         method="json_schema",
     ).invoke([
@@ -58,7 +58,7 @@ Use short task ids such as t1. Dependencies may refer only to tasks in the plan.
 Preserve the supplied goal exactly in the plan's goal field."""),
     ], temperature=0.1)
     # The caller's goal remains authoritative even if the model paraphrases it.
-    payload = generated.model_dump()
+    payload = generated.model_dump() if hasattr(generated, "model_dump") else dict(generated)
     payload["goal"] = goal
     return Plan.model_validate(payload)
 

@@ -3,13 +3,18 @@ State Graph Router (web/routers/state_graph.py)
 """
 
 import uuid
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import GraphCheckpoint
+from db.repositories.checkpoint_repo import AsyncCheckpointRepository
 from db.session import get_async_db
-from state_graph.models import GraphState
 from services.state_graph_service import StateGraphService
+from state_graph.models import GraphState
 from web.deps import require_roles
 
 router = APIRouter(prefix="/api/state-graph", tags=["State Graph"])
@@ -60,11 +65,7 @@ async def get_state_graph_status(run_id: str, db: AsyncSession = Depends(get_asy
 @router.get("/{run_id}/history")
 async def get_state_graph_history(run_id: str, db: AsyncSession = Depends(get_async_db)):
     """List historical checkpoint steps for time-travel inspection."""
-    from db.repositories.checkpoint_repo import AsyncCheckpointRepository
     repo = AsyncCheckpointRepository(db)
-    # query checkpoints
-    from sqlalchemy import select
-    from db.models import GraphCheckpoint
     stmt = select(GraphCheckpoint).where(GraphCheckpoint.run_id == run_id).order_by(GraphCheckpoint.step_number.asc())
     rows = (await db.scalars(stmt)).all()
     checkpoints = [

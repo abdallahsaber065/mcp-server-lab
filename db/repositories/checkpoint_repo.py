@@ -3,12 +3,14 @@ Graph Checkpoint Repository (db/repositories/checkpoint_repo.py)
 """
 
 import uuid
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from db.models import GraphCheckpoint
-from db.repositories.base import BaseRepository, AsyncBaseRepository
+from db.repositories.base import AsyncBaseRepository, BaseRepository
 from state_graph.models import GraphState
 
 

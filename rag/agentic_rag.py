@@ -1,5 +1,6 @@
 """Agentic RAG: Multi-Hop Reasoning Loop with Query Decomposition & Rewriting."""
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from rag.hybrid_rag import HybridSearchEngine
 
 

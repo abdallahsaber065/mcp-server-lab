@@ -7,10 +7,9 @@ external to configure — just `pip install rank_bm25`.
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
 
 from keyword_search import KeywordStore
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # Store: same upsert()/query() shape you'd use with a vector DB,
 

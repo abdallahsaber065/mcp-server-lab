@@ -3,8 +3,9 @@ Prompt Builder Service (web/services/prompt_builder.py)
 Constructs persona-aware, dynamically grounded system prompts for Cornerstone Realty autonomous agents.
 """
 
-from typing import Optional, Dict, Any
-from db.models import Tenant, Unit, Property, Lease
+from typing import Any, Dict, Optional
+
+from db.models import Lease, Property, Tenant, Unit
 from db.session import get_sync_db
 
 
@@ -61,7 +62,7 @@ def build_system_prompt(
         # Fetch lease details if tenant
         active_lease: Optional[Lease] = None
         if t_id:
-            active_lease = db.query(Lease).filter(Lease.tenant_id == t_id, Lease.is_active == True).first()
+            active_lease = db.query(Lease).filter(Lease.tenant_id == t_id, Lease.is_active).first()
 
     finally:
         db.close()

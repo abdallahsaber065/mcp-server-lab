@@ -2,14 +2,16 @@
 Leases Router (web/routers/leases.py)
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from db.session import get_async_db
-from db.models import Lease, Tenant, Unit, Property
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import Lease, Property, Tenant, Unit
 from db.repositories.tenant_repo import AsyncTenantRepository
+from db.session import get_async_db
 from services.lease_service import LeaseService
 from web.deps import get_current_user, require_roles
 

@@ -9,9 +9,10 @@ Handles 4 production challenges:
   4. Conflict Resolution: Resolves real contradictions between opposing episodes.
 """
 
-from datetime import datetime, timezone, timedelta
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -80,7 +81,7 @@ class SemanticMemoryStore:
         last_id = cursor.lastrowid
         if not self._shared_conn:
             conn.close()
-        return last_id
+        return int(last_id or 0)
 
     def get_active_facts(self, subject: str) -> List[Dict[str, Any]]:
         conn = self._get_connection()
@@ -109,8 +110,8 @@ class SemanticMemoryStore:
     def supersede_fact(self, old_fact_id: int, new_fact_id: int):
         conn = self._get_connection()
         conn.execute("""
-            UPDATE semantic_memory 
-            SET status = 'superseded', superseded_by_id = ? 
+            UPDATE semantic_memory
+            SET status = 'superseded', superseded_by_id = ?
             WHERE fact_id = ?
         """, (new_fact_id, old_fact_id))
         conn.commit()

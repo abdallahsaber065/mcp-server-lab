@@ -5,8 +5,8 @@ metadata-enriched sections (City, Section ID, Law Reference, Role).
 """
 
 from typing import Any, Dict, List
-from rag.vector_store import VectorStore
 
+from rag.vector_store import VectorStore
 
 POLICY_BINDER_CORPUS = [
     {

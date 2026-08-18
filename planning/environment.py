@@ -6,6 +6,10 @@ Returns EnvironmentFeedback(success: bool, score: float, details: list[str]).
 
 import sqlite3
 from pathlib import Path
+
+from db.models import MaintenanceRequest
+from db.session import get_sync_db
+
 from .models import EnvironmentFeedback
 
 
@@ -22,8 +26,6 @@ class Environment:
 
     def _check_db_active_emergencies(self) -> int:
         try:
-            from db.session import get_sync_db
-            from db.models import MaintenanceRequest
             with next(get_sync_db()) as session:
                 return session.query(MaintenanceRequest).filter(
                     MaintenanceRequest.priority.in_(["urgent", "emergency"])

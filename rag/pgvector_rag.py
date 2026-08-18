@@ -5,10 +5,12 @@ and Strict Role-Based Permission Pre-filtering for Tenant Isolation.
 """
 
 import json
-import math
 import logging
-from typing import List, Dict, Any, Optional
+import math
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import select, text
+
 from db.models import RagDocumentEmbedding
 from db.session import get_sync_db
 from rag.embedding_engine import GeminiEmbeddingEngine, embedding_engine
@@ -138,7 +140,7 @@ class PgVectorRAGStore:
         # Filter in-memory fallback records (applies identical permission algebra)
         for doc in self._in_memory_fallback_store:
             allowed_roles = doc.get("allowed_roles", ["all"])
-            
+
             # Security Rule 1: Role permission check
             if "all" not in allowed_roles and role not in allowed_roles:
                 continue

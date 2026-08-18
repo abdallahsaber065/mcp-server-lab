@@ -3,10 +3,12 @@ Property Service (services/property_service.py)
 Encapsulates property and unit domain operations.
 """
 
-from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.property_repo import PropertyRepository, AsyncPropertyRepository
+from sqlalchemy.orm import Session
+
+from db.repositories.property_repo import AsyncPropertyRepository, PropertyRepository
 
 
 class PropertyService:

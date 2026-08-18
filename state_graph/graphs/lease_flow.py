@@ -4,10 +4,11 @@ Integrates: Task Decomposition + Constrained ReAct
 """
 
 import uuid
-from typing import Dict, Any
-from state_graph.models import GraphState, NodeResult
-from state_graph.engine import StateGraph
+from typing import Any, Dict
+
 from services.lease_service import LeaseService
+from state_graph.engine import StateGraph
+from state_graph.models import GraphState, NodeResult
 
 
 def node_decompose_requirements(state: GraphState) -> NodeResult:

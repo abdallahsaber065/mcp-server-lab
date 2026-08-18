@@ -4,6 +4,7 @@ Handles MCP tools, capabilities, resources, prompts, and model registry.
 """
 
 from fastapi import APIRouter, HTTPException
+
 from mcp_server.server import CornerstoneMCPServer
 from web.llm_engine import AVAILABLE_MODELS
 
