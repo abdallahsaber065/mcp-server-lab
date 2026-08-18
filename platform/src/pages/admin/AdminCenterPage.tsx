@@ -21,7 +21,24 @@ import { useAppStore } from '../../stores/useAppStore';
 
 export const AdminCenterPage: React.FC = () => {
   const { addToast } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'hitl' | 'tools' | 'tickets' | 'rag'>('hitl');
+
+  const getInitialTab = (): 'hitl' | 'tools' | 'tickets' | 'rag' => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('tab');
+    if (t === 'hitl' || t === 'tools' || t === 'tickets' || t === 'rag') {
+      return t;
+    }
+    return 'hitl';
+  };
+
+  const [activeTab, setActiveTabState] = useState<'hitl' | 'tools' | 'tickets' | 'rag'>(getInitialTab);
+
+  const setActiveTab = (tab: 'hitl' | 'tools' | 'tickets' | 'rag') => {
+    setActiveTabState(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tab);
+    window.history.replaceState(null, '', url.toString());
+  };
 
   // HITL State
   const [hitlTasks, setHitlTasks] = useState<any[]>([]);

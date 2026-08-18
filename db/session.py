@@ -113,8 +113,22 @@ SyncSessionLocal = sessionmaker(
 )
 
 
+def _apply_schema_migrations(connection):
+    """Safely apply backward-compatible schema patches to existing tables."""
+    try:
+        if IS_SQLITE:
+            cursor = connection.execute(text("PRAGMA table_info(chat_sessions);"))
+            existing_cols = [row[1] for row in cursor.fetchall()]
+            if existing_cols and "user_id" not in existing_cols:
+                connection.execute(text("ALTER TABLE chat_sessions ADD COLUMN user_id INTEGER;"))
+        else:
+            connection.execute(text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS user_id INTEGER;"))
+    except Exception as e:
+        logger.debug(f"Schema migration check: {e}")
+
+
 async def init_async_db():
-    """Create all ORM tables asynchronously."""
+    """Create all ORM tables asynchronously and apply runtime schema patches."""
     if not IS_SQLITE:
         try:
             async with async_engine.connect() as conn:
@@ -125,6 +139,7 @@ async def init_async_db():
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_apply_schema_migrations)
         if IS_SQLITE:
             # Set WAL mode asynchronously
             await conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
@@ -132,7 +147,7 @@ async def init_async_db():
 
 
 def init_sync_db():
-    """Create all ORM tables synchronously."""
+    """Create all ORM tables synchronously and apply runtime schema patches."""
     if not IS_SQLITE:
         try:
             with sync_engine.connect() as conn:
@@ -142,6 +157,8 @@ def init_sync_db():
             pass
     try:
         Base.metadata.create_all(bind=sync_engine)
+        with sync_engine.begin() as conn:
+            _apply_schema_migrations(conn)
     except Exception as e:
         logger.warning(f"Sync DB metadata creation notice: {e}")
 

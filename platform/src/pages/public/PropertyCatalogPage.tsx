@@ -10,7 +10,25 @@ import { apiClient } from '../../services/api';
 export const PropertyCatalogPage: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
-  const [selectedCity, setSelectedCity] = useState<string>('all');
+
+  const getInitialCity = (): string => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('city') || 'all';
+  };
+
+  const [selectedCity, setSelectedCityState] = useState<string>(getInitialCity);
+
+  const setSelectedCity = (city: string) => {
+    setSelectedCityState(city);
+    const url = new URL(window.location.href);
+    if (city === 'all') {
+      url.searchParams.delete('city');
+    } else {
+      url.searchParams.set('city', city);
+    }
+    window.history.replaceState(null, '', url.toString());
+  };
+
   const [maxRent, setMaxRent] = useState<number>(50000);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);

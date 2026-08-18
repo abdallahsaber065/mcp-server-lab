@@ -34,7 +34,21 @@ const GRAPH_1_NODES: NodeInfo[] = [
 
 export const StateGraphPage: React.FC = () => {
   const { addToast } = useAppStore();
-  const [selectedGraph, setSelectedGraph] = useState('graph_commercial_lease');
+
+  const getInitialGraph = (): string => {
+    const params = new URLSearchParams(window.location.search);
+    const g = params.get('graph');
+    return g || 'graph_commercial_lease';
+  };
+
+  const [selectedGraph, setSelectedGraphState] = useState<string>(getInitialGraph);
+
+  const setSelectedGraph = (graphId: string) => {
+    setSelectedGraphState(graphId);
+    const url = new URL(window.location.href);
+    url.searchParams.set('graph', graphId);
+    window.history.replaceState(null, '', url.toString());
+  };
   const [activeNode, setActiveNode] = useState<string>('verify_tenant_identity');
   const [completedNodes, setCompletedNodes] = useState<string[]>([]);
   const [graphStatus, setGraphStatus] = useState<string>('idle');
