@@ -13,6 +13,7 @@ interface AuthState {
   role: UserRole;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (fullName: string, email: string, password: string, role?: string, phone?: string) => Promise<void>;
   quickLoginAs: (role: 'executive_admin' | 'property_manager' | 'tenant') => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
@@ -35,6 +36,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
+        skipAuth: true,
+      });
+
+      localStorage.setItem('cornerstone_access_token', data.access_token);
+      localStorage.setItem('cornerstone_refresh_token', data.refresh_token);
+      localStorage.setItem('cornerstone_user', JSON.stringify(data.user));
+
+      set({
+        user: data.user,
+        accessToken: data.access_token,
+        isAuthenticated: true,
+        role: data.user.role,
+        isLoading: false,
+      });
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
+  register: async (fullName: string, email: string, password: string, role = 'tenant', phone?: string) => {
+    set({ isLoading: true });
+    try {
+      const data = await apiClient<{
+        access_token: string;
+        refresh_token: string;
+        user: User;
+      }>('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          full_name: fullName,
+          email,
+          password,
+          role,
+          phone,
+        }),
         skipAuth: true,
       });
 

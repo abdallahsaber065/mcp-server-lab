@@ -43,3 +43,17 @@ class AsyncUserRepository(AsyncBaseRepository[Tenant]):
             await self.session.commit()
             return True
         return False
+
+    async def create_user(self, full_name: str, email: str, hashed_password: str, phone: Optional[str] = None, role: str = "tenant") -> Tenant:
+        user = Tenant(
+            full_name=full_name,
+            email=email,
+            hashed_password=hashed_password,
+            phone=phone,
+            role=role,
+            is_active=True,
+        )
+        self.session.add(user)
+        await self.session.commit()
+        await self.session.refresh(user)
+        return user

@@ -150,30 +150,31 @@ export const Sidebar: React.FC = () => {
               )}
             </div>
 
-            {isSidebarOpen && (
-              <button
-                onClick={() => {
-                  logout();
-                  addToast('Signed out successfully', 'info');
-                  setCurrentPage('home');
-                }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                title="Sign Out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              onClick={() => {
+                logout();
+                addToast('Signed out successfully', 'info');
+                setCurrentPage('home');
+              }}
+              className={`p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors ${
+                !isSidebarOpen ? 'mt-1.5' : ''
+              }`}
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         ) : (
-          isSidebarOpen && (
-            <button
-              onClick={() => setCurrentPage('login')}
-              className="w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 transition-all"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In / Personas</span>
-            </button>
-          )
+          <button
+            onClick={() => setCurrentPage('login')}
+            className={`w-full flex items-center justify-center rounded-xl text-xs font-semibold bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 transition-all ${
+              isSidebarOpen ? 'space-x-2 px-3 py-2' : 'p-2'
+            }`}
+            title="Sign In / Personas"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            {isSidebarOpen && <span>Sign In / Personas</span>}
+          </button>
         )}
 
         {/* Live MCP Gateway Status Indicator */}

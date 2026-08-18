@@ -144,9 +144,23 @@ export const ChatStudioPage: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Configuration Selectors
-  const [selectedModel, setSelectedModel] = useState('gemini/gemini-3.1-flash-lite');
-  const [selectedRag, setSelectedRag] = useState<'naive' | 'hybrid' | 'agentic' | 'graph' | 'pgvector'>('pgvector');
+  // Configuration Selectors with localStorage persistence
+  const [selectedModel, setSelectedModelState] = useState<string>(() => {
+    return localStorage.getItem('cornerstone_selected_model') || 'gemini/gemini-3.1-flash-lite';
+  });
+  const [selectedRag, setSelectedRagState] = useState<'naive' | 'hybrid' | 'agentic' | 'graph' | 'pgvector'>(() => {
+    return (localStorage.getItem('cornerstone_selected_rag') as any) || 'pgvector';
+  });
+
+  const setSelectedModel = (model: string) => {
+    localStorage.setItem('cornerstone_selected_model', model);
+    setSelectedModelState(model);
+  };
+
+  const setSelectedRag = (rag: 'naive' | 'hybrid' | 'agentic' | 'graph' | 'pgvector') => {
+    localStorage.setItem('cornerstone_selected_rag', rag);
+    setSelectedRagState(rag);
+  };
 
   // Messages & Stream State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -167,11 +181,11 @@ export const ChatStudioPage: React.FC = () => {
   // Load chat sessions on mount or when active user changes
   useEffect(() => {
     loadSessions();
-  }, [user]);
+  }, [user?.id, user?.email]);
 
   const loadSessions = async (keepCurrentActive: boolean = false) => {
     try {
-      const res = await apiClient<any>('/api/chats', { skipAuth: true });
+      const res = await apiClient<any>('/api/chats');
       const fetched: ChatSessionSummary[] = Array.isArray(res) ? res : res?.sessions || [];
       setSessions(fetched);
       if (fetched.length > 0) {
@@ -195,7 +209,6 @@ export const ChatStudioPage: React.FC = () => {
           title: 'New conversation',
           role: role || 'property_manager',
         }),
-        skipAuth: true,
       });
 
       const newSessionId = res.session_id || `session_${Date.now()}`;
@@ -227,9 +240,9 @@ export const ChatStudioPage: React.FC = () => {
       setActiveSessionId(fallbackId);
       setMessages([
         {
-          id: 'msg-welcome',
+          id: 'msg-welcome-fb',
           sender: 'assistant',
-          content: `Hello ${user?.full_name || 'there'}! I am the Cornerstone Autonomous Realty Assistant. How can I assist you today?`,
+          content: `Hello ${user?.full_name || 'there'}! How can I assist you today?`,
         },
       ]);
     }
@@ -238,14 +251,16 @@ export const ChatStudioPage: React.FC = () => {
   const loadSessionMessages = async (sessionId: string) => {
     setActiveSessionId(sessionId);
     try {
-      const res = await apiClient<{ messages: any[] }>(`/api/chats/${sessionId}`, { skipAuth: true });
-      if (res.messages && res.messages.length > 0) {
-        const reconstructed = reconstructConversation(res.messages);
+      const res = await apiClient<any>(`/api/chats/${sessionId}`);
+      const rawMessages = res.messages || [];
+
+      if (rawMessages.length > 0) {
+        const reconstructed = reconstructConversation(rawMessages);
         setMessages(reconstructed);
       } else {
         setMessages([
           {
-            id: 'msg-welcome',
+            id: 'msg-welcome-empty',
             sender: 'assistant',
             content: `Session resumed. Ask any question regarding properties, tenancy laws, or maintenance dispatch.`,
           },
@@ -259,7 +274,7 @@ export const ChatStudioPage: React.FC = () => {
   const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await apiClient(`/api/chats/${sessionId}`, { method: 'DELETE', skipAuth: true });
+      await apiClient(`/api/chats/${sessionId}`, { method: 'DELETE' });
       const updated = sessions.filter((s) => s.session_id !== sessionId);
       setSessions(updated);
       addToast('Conversation deleted', 'info');
@@ -316,9 +331,15 @@ export const ChatStudioPage: React.FC = () => {
     );
 
     try {
+      const token = localStorage.getItem('cornerstone_access_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           session_id: currentSid,
           user_message: userText,

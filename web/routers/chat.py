@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
@@ -90,18 +90,24 @@ class ElicitationResponse(BaseModel):
 
 
 @router.get("/chats")
-async def list_chats(db: AsyncSession = Depends(get_async_db)):
-    """List all chat sessions ordered by latest activity."""
+async def list_chats(request: Request, db: AsyncSession = Depends(get_async_db)):
+    """List chat sessions for the currently authenticated user (scoped by JWT)."""
+    from web.deps import get_optional_user
+    user = await get_optional_user(request, db)
+    user_id = user.tenant_id if user else None
     repo = AsyncChatRepository(db)
-    return await repo.get_all_chat_sessions()
+    return await repo.get_all_chat_sessions(user_id=user_id)
 
 
 @router.post("/chats")
-async def create_chat(req: CreateSessionRequest, db: AsyncSession = Depends(get_async_db)):
-    """Create a new persistent chat session in the database."""
+async def create_chat(req: CreateSessionRequest, request: Request, db: AsyncSession = Depends(get_async_db)):
+    """Create a new persistent chat session in the database, owned by the authenticated user."""
+    from web.deps import get_optional_user
+    user = await get_optional_user(request, db)
+    user_id = user.tenant_id if user else None
     session_id = f"session_{uuid.uuid4().hex[:12]}"
     repo = AsyncChatRepository(db)
-    return await repo.create_chat_session(session_id=session_id, title=req.title, role=req.role)
+    return await repo.create_chat_session(session_id=session_id, title=req.title, role=req.role, user_id=user_id)
 
 
 @router.get("/chats/{session_id}")

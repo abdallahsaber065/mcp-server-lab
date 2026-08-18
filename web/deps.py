@@ -75,3 +75,25 @@ def require_roles(allowed_roles: List[str]) -> Callable:
             )
         return current_user
     return role_checker
+
+
+async def get_optional_user(request, db: AsyncSession) -> Optional[Tenant]:
+    """Extract current user from raw Request Authorization header. Returns None if no valid token."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header[7:]
+    try:
+        payload = await AuthService.verify_token(token)
+        if not payload or payload.get("type") != "access":
+            return None
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        repo = AsyncUserRepository(db)
+        user = await repo.get_by_id(int(user_id))
+        if not user or not user.is_active:
+            return None
+        return user
+    except Exception:
+        return None

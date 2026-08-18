@@ -122,6 +122,49 @@ async def get_current_user_profile(current_user: Tenant = Depends(get_current_us
     }
 
 
+@router.post("/register")
+async def register(req: RegisterRequest, db: AsyncSession = Depends(get_async_db)):
+    """Register a new user account. Role defaults to 'tenant'."""
+    repo = AsyncUserRepository(db)
+    existing = await repo.get_by_email(req.email)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email address already exists."
+        )
+
+    allowed_roles = {"tenant", "property_manager"}
+    role = req.role if req.role in allowed_roles else "tenant"
+    hashed_password = AuthService.hash_password(req.password)
+
+    user = await repo.create_user(
+        full_name=req.full_name,
+        email=req.email,
+        hashed_password=hashed_password,
+        phone=req.phone,
+        role=role,
+    )
+
+    token_data = {"sub": str(user.tenant_id), "email": user.email, "role": user.role, "name": user.full_name}
+    access_token = AuthService.create_access_token(token_data)
+    refresh_token = AuthService.create_refresh_token(token_data)
+    await repo.update_refresh_token(user.tenant_id, refresh_token)
+
+    return {
+        "status": "success",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.tenant_id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "assigned_unit_id": user.assigned_unit_id
+        }
+    }
+
+
 @router.get("/demo-accounts")
 async def list_demo_accounts():
     """Return pre-configured demonstration accounts for 1-click login."""

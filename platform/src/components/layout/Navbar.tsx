@@ -5,41 +5,14 @@
 import React from 'react';
 import {
   Building2,
-  Shield,
-  Layers,
-  User,
-  Sparkles,
   Menu,
-  ChevronDown,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useAppStore } from '../../stores/useAppStore';
 
 export const Navbar: React.FC = () => {
-  const { isAuthenticated, quickLoginAs } = useAuthStore();
-  const { currentPage, setCurrentPage, toggleSidebar, addToast } = useAppStore();
-  const [showDemoMenu, setShowDemoMenu] = React.useState(false);
-
-  const handleQuickSwitch = async (targetRole: 'executive_admin' | 'property_manager' | 'tenant') => {
-    try {
-      await quickLoginAs(targetRole);
-      setShowDemoMenu(false);
-      addToast(`Switched persona to ${targetRole.replace('_', ' ').toUpperCase()}`, 'success');
-
-      const roleAllowedPages: Record<string, string[]> = {
-        executive_admin: ['home', 'properties', 'showcase', 'status', 'planning', 'dashboard', 'chat', 'stateGraph', 'admin'],
-        property_manager: ['home', 'properties', 'showcase', 'status', 'planning', 'dashboard', 'chat', 'stateGraph'],
-        tenant: ['home', 'properties', 'showcase', 'status', 'planning', 'dashboard', 'chat'],
-      };
-
-      const allowed = roleAllowedPages[targetRole] || ['home', 'properties', 'showcase', 'status', 'planning'];
-      if (!allowed.includes(currentPage) || currentPage === 'login') {
-        setCurrentPage('dashboard');
-      }
-    } catch {
-      addToast('Failed to switch persona', 'error');
-    }
-  };
+  const { isAuthenticated } = useAuthStore();
+  const { currentPage, setCurrentPage, toggleSidebar } = useAppStore();
 
   return (
     <header className="h-16 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40 px-4 flex items-center justify-between">
@@ -105,49 +78,8 @@ export const Navbar: React.FC = () => {
         </button>
       </nav>
 
-      {/* Role Switcher & Auth Actions */}
+      {/* Auth Actions */}
       <div className="flex items-center space-x-3">
-        {/* 1-Click Demo Persona Switcher */}
-        <div className="relative">
-          <button
-            onClick={() => setShowDemoMenu(!showDemoMenu)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 text-indigo-300 hover:border-indigo-500/40 transition-colors shadow-sm"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Switch Role</span>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-
-          {showDemoMenu && (
-            <div className="absolute right-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">
-                1-Click Persona Login
-              </div>
-              <button
-                onClick={() => handleQuickSwitch('executive_admin')}
-                className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-rose-300 hover:bg-rose-500/10 flex items-center justify-between"
-              >
-                <span>Executive Admin</span>
-                <Shield className="w-3.5 h-3.5 text-rose-400" />
-              </button>
-              <button
-                onClick={() => handleQuickSwitch('property_manager')}
-                className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-indigo-300 hover:bg-indigo-500/10 flex items-center justify-between"
-              >
-                <span>Property Manager</span>
-                <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              </button>
-              <button
-                onClick={() => handleQuickSwitch('tenant')}
-                className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-emerald-300 hover:bg-emerald-500/10 flex items-center justify-between"
-              >
-                <span>Tenant (Tarek Mahdy)</span>
-                <User className="w-3.5 h-3.5 text-emerald-400" />
-              </button>
-            </div>
-          )}
-        </div>
-
         {!isAuthenticated && (
           <button
             onClick={() => setCurrentPage('login')}

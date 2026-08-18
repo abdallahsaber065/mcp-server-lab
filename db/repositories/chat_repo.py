@@ -151,9 +151,9 @@ class AsyncChatRepository(AsyncBaseRepository[ChatSession]):
     def __init__(self, session: AsyncSession):
         super().__init__(ChatSession, session)
 
-    async def create_chat_session(self, session_id: Optional[str] = None, title: str = "محادثة جديدة", role: str = "property_manager") -> Dict[str, Any]:
+    async def create_chat_session(self, session_id: Optional[str] = None, title: str = "محادثة جديدة", role: str = "property_manager", user_id: Optional[int] = None) -> Dict[str, Any]:
         sid = session_id or f"session_{uuid.uuid4().hex[:12]}"
-        chat_sess = ChatSession(session_id=sid, title=title, user_role=role)
+        chat_sess = ChatSession(session_id=sid, title=title, user_role=role, user_id=user_id)
         self.session.add(chat_sess)
         await self.session.commit()
         await self.session.refresh(chat_sess)
@@ -165,8 +165,14 @@ class AsyncChatRepository(AsyncBaseRepository[ChatSession]):
             "updated_at": chat_sess.updated_at.isoformat() if chat_sess.updated_at else None
         }
 
-    async def get_all_chat_sessions(self) -> List[Dict[str, Any]]:
-        stmt = select(ChatSession).order_by(ChatSession.updated_at.desc())
+    async def get_all_chat_sessions(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """List sessions. If user_id given, return only that user's sessions."""
+        if user_id is not None:
+            stmt = select(ChatSession).where(
+                (ChatSession.user_id == user_id) | (ChatSession.user_id.is_(None))
+            ).order_by(ChatSession.updated_at.desc())
+        else:
+            stmt = select(ChatSession).order_by(ChatSession.updated_at.desc())
         result = await self.session.scalars(stmt)
         sessions = result.all()
         return [

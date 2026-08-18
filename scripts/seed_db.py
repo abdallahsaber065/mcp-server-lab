@@ -161,6 +161,30 @@ def seed_sync(reset: bool = False):
         except Exception as mem_err:
             print(f"⚠️ Memory seeding notice: {mem_err}")
 
+        # 9. PGVector RAG Document Embeddings Seed
+        try:
+            from rag.embedding_engine import embedding_engine
+            from db.models import RagDocumentEmbedding
+
+            for doc in rag_data:
+                existing_emb = session.query(RagDocumentEmbedding).filter_by(doc_id=doc["doc_id"]).first()
+                if not existing_emb:
+                    emb_vec = embedding_engine.embed_document(doc["title"], doc["content"])
+                    new_emb = RagDocumentEmbedding(
+                        doc_id=doc["doc_id"],
+                        title=doc["title"],
+                        content=doc["content"],
+                        embedding_model=embedding_engine.model_name,
+                        embedding=emb_vec,
+                        allowed_roles_json='["all"]',
+                        metadata_json=doc.get("metadata_json", "{}")
+                    )
+                    session.add(new_emb)
+            session.commit()
+            print(f"✅ Seeded {len(rag_data)} PGVector Document Embeddings (Gemini-2 MRL 768-dim).")
+        except Exception as pgv_err:
+            print(f"⚠️ PGVector embedding seeding notice: {pgv_err}")
+
         # Synchronize PostgreSQL auto-increment sequences after explicit PK insertions
         from db.session import IS_SQLITE
         if not IS_SQLITE:
@@ -171,7 +195,8 @@ def seed_sync(reset: bool = False):
                 ("tenants", "tenant_id"),
                 ("leases", "lease_id"),
                 ("maintenance_requests", "request_id"),
-                ("chat_messages", "message_id")
+                ("chat_messages", "message_id"),
+                ("rag_document_embeddings", "embedding_id")
             ]
             for table, col in seq_tables:
                 try:
@@ -279,6 +304,33 @@ async def seed_async(reset: bool = False):
                     setattr(existing, k, v)
         await session.commit()
         print(f"✅ [Async] Seeded {len(rag_data)} RAG Documents.")
+
+        # PGVector RAG Document Embeddings Seed
+        try:
+            from rag.embedding_engine import embedding_engine
+            from db.models import RagDocumentEmbedding
+            from sqlalchemy import select
+
+            for doc in rag_data:
+                stmt = select(RagDocumentEmbedding).where(RagDocumentEmbedding.doc_id == doc["doc_id"])
+                res = await session.scalars(stmt)
+                existing_emb = res.first()
+                if not existing_emb:
+                    emb_vec = embedding_engine.embed_document(doc["title"], doc["content"])
+                    new_emb = RagDocumentEmbedding(
+                        doc_id=doc["doc_id"],
+                        title=doc["title"],
+                        content=doc["content"],
+                        embedding_model=embedding_engine.model_name,
+                        embedding=emb_vec,
+                        allowed_roles_json='["all"]',
+                        metadata_json=doc.get("metadata_json", "{}")
+                    )
+                    session.add(new_emb)
+            await session.commit()
+            print(f"✅ [Async] Seeded {len(rag_data)} PGVector Document Embeddings (Gemini-2 MRL 768-dim).")
+        except Exception as pgv_err:
+            print(f"⚠️ [Async] PGVector embedding seeding notice: {pgv_err}")
 
     print("\n🎉 Database async seeding completed successfully!\n")
 

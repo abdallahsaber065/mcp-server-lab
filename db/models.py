@@ -113,6 +113,7 @@ class ChatSession(Base):
     session_id = Column(String(64), primary_key=True)
     title = Column(String(200), default="محادثة جديدة")
     user_role = Column(String(50), default="property_manager")
+    user_id = Column(Integer, nullable=True, index=True)  # FK to tenant_id; null = legacy/unowned
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
