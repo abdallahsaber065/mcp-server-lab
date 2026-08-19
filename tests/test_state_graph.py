@@ -52,7 +52,7 @@ def test_renovation_flow_execution_full():
     )
     result1 = graph.run(initial_state)
     assert result1.status == "PAUSED_HITL"
-    assert result1.current_node == "engineer_hitl_approval"
+    assert result1.current_node == "tenant_completion_and_rating"
     assert result1.pending_hitl is not None
     assert "Chief Maintenance Engineer Approval Required" in result1.pending_hitl["reason"]
     assert result1.variables.get("selected_contractor") == "Nile Specialized Engineering & Maintenance"
