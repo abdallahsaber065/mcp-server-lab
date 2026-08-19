@@ -78,3 +78,67 @@ def test_renovation_flow_execution_full():
 def test_crash_recovery_demo_execution():
     """Verify scripts/demo_crash_recovery.py main() executes without errors."""
     run_crash_demo()
+
+
+def test_checkpoint_time_travel_diff_and_rollback():
+    """Verify time-travel state diffing and historical snapshot rollback engine (Issue #37)."""
+    checkpointer = DurableCheckpointer()
+    run_id = "test-time-travel-run"
+    
+    state_s1 = GraphState(
+        run_id=run_id,
+        graph_id="renovation_permit_flow",
+        current_node="retrieve_engineering_policy",
+        step_number=1,
+        variables={"stage": "initial", "budget": 10000.0}
+    )
+    checkpointer.save_checkpoint(state_s1)
+    
+    state_s2 = GraphState(
+        run_id=run_id,
+        graph_id="renovation_permit_flow",
+        current_node="lats_vendor_tender_search",
+        step_number=2,
+        variables={"stage": "tender_selected", "budget": 18500.0, "vendor": "Nile Specialized"}
+    )
+    checkpointer.save_checkpoint(state_s2)
+    
+    # 1. Compute state diff between Step 1 and Step 2
+    diff = checkpointer.diff_checkpoints(run_id, 1, 2)
+    assert diff["from_step"] == 1
+    assert diff["to_step"] == 2
+    assert "vendor" in diff["added_variables"]
+    assert diff["modified_variables"]["budget"]["from"] == 10000.0
+    assert diff["modified_variables"]["budget"]["to"] == 18500.0
+    
+    # 2. Rollback to Step 1
+    rolled_back = checkpointer.rollback_to_checkpoint(run_id, 1)
+    assert rolled_back is not None
+    assert rolled_back.variables["stage"] == "initial"
+    assert rolled_back.variables["budget"] == 10000.0
+    assert rolled_back.step_number == 3
+    assert any("Rolled back" in h.get("message", "") for h in rolled_back.history)
+    
+    checkpointer.close()
+
+
+def test_renovation_flow_multi_criteria_vendor_scoring():
+    """Verify Graph 2 multi-criteria vendor scoring engine (Issue #38)."""
+    checkpointer = DurableCheckpointer()
+    graph = build_renovation_flow_graph(checkpointer=checkpointer)
+    
+    initial_state = GraphState(
+        run_id="test-scoring-run",
+        graph_id="renovation_permit_flow",
+        current_node="retrieve_engineering_policy",
+        variables={"location": "Cornerstone Heights - Zamalek"}
+    )
+    res = graph.run(initial_state)
+    assert "vendor_sla_matrix" in res.variables
+    matrix = res.variables["vendor_sla_matrix"]
+    assert matrix["vendor_name"] == "Nile Specialized Engineering & Maintenance"
+    assert matrix["dispatch_sla_hours"] == 1.5
+    assert matrix["composite_score"] > 0.5
+    
+    checkpointer.close()
+
