@@ -18,7 +18,7 @@ import {
 import { apiClient } from '../../services/api';
 import { useAppStore } from '../../stores/useAppStore';
 
-export type ActionType = 'schedule_tour' | 'apply_lease' | 'submit_maintenance' | 'modify_lease';
+export type ActionType = 'schedule_tour' | 'apply_lease' | 'submit_maintenance' | 'modify_lease' | 'confirm_payment_receipt' | 'record_payment';
 
 export interface ActionConfirmationPayload {
   action_type: ActionType;
@@ -116,6 +116,20 @@ export const ActionConfirmationCard: React.FC<ActionConfirmationCardProps> = ({
       badge: 'Executive Authorization Required',
       border: 'border-purple-500/30',
       bg: 'bg-purple-500/10',
+    },
+    confirm_payment_receipt: {
+      title: 'Human Verification: Audit Bank Deposit Receipt',
+      icon: <DollarSign className="w-4 h-4 text-emerald-400" />,
+      badge: 'Vision AI OCR & Accountant Audit',
+      border: 'border-emerald-500/30',
+      bg: 'bg-emerald-500/10',
+    },
+    record_payment: {
+      title: 'Human-in-the-Loop: Confirm Rent Installment Recording',
+      icon: <DollarSign className="w-4 h-4 text-emerald-400" />,
+      badge: 'Financial Transaction Verification',
+      border: 'border-emerald-500/30',
+      bg: 'bg-emerald-500/10',
     },
   }[actionType] || {
     title: 'Human-in-the-Loop Confirmation Required',
@@ -318,6 +332,85 @@ export const ActionConfirmationCard: React.FC<ActionConfirmationCardProps> = ({
                 onChange={(e) => handleFieldChange('proposed_rent', Number(e.target.value))}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-indigo-500 focus:outline-none"
               />
+            </div>
+          </div>
+        )}
+
+        {(actionType === 'confirm_payment_receipt' || actionType === 'record_payment') && (
+          <div className="space-y-3.5 text-xs">
+            {/* Raw Images Gallery for Visual Inspection */}
+            {(formData.raw_images || formData.image_urls || formData.images) && (
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-1.5">
+                  📸 Raw Uploaded Receipt / Inspection Documents
+                </label>
+                <div className="flex items-center gap-2 overflow-x-auto p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                  {((formData.raw_images || formData.image_urls || formData.images) as string[]).map((imgUrl, i) => (
+                    <a key={i} href={imgUrl} target="_blank" rel="noopener noreferrer" className="relative group shrink-0">
+                      <img
+                        src={imgUrl}
+                        alt={`Document ${i + 1}`}
+                        className="w-24 h-20 object-cover rounded-lg border border-slate-700 hover:border-emerald-500 transition-all shadow-md"
+                      />
+                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-950/80 text-slate-300">
+                        #{i + 1}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI-Extracted Editable Form */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Bank / Institution Name</label>
+                <input
+                  type="text"
+                  value={formData.bank_name || 'Banque Misr'}
+                  onChange={(e) => handleFieldChange('bank_name', e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-emerald-500 focus:outline-none"
+                  placeholder="Bank Name"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Depositor / Payer Name</label>
+                <input
+                  type="text"
+                  value={formData.depositor_name || formData.applicant_name || ''}
+                  onChange={(e) => handleFieldChange('depositor_name', e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-emerald-500 focus:outline-none"
+                  placeholder="Depositor Name"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Verified Deposit Amount (EGP)</label>
+                <input
+                  type="number"
+                  value={formData.amount || formData.amount_paid || 144000}
+                  onChange={(e) => handleFieldChange('amount', Number(e.target.value))}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Transaction / Reference Number</label>
+                <input
+                  type="text"
+                  value={formData.transaction_reference || formData.reference_number || 'BM-9921448'}
+                  onChange={(e) => handleFieldChange('transaction_reference', e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-semibold text-slate-400 mb-1">Auditor Notes</label>
+                <input
+                  type="text"
+                  value={formData.notes || 'Deposit verified against Banque Misr transfer slip.'}
+                  onChange={(e) => handleFieldChange('notes', e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-emerald-500 focus:outline-none"
+                  placeholder="Verification notes..."
+                />
+              </div>
             </div>
           </div>
         )}

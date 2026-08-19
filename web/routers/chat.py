@@ -10,7 +10,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import os
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +71,8 @@ class StreamChatRequest(BaseModel):
     session_id: str
     user_message: Optional[str] = None
     message: Optional[str] = None
+    image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
     model: str = "gemini/gemini-3.1-flash-lite"
     role: Optional[str] = None
     user_email: Optional[str] = None
@@ -80,6 +83,13 @@ class StreamChatRequest(BaseModel):
     def get_message(self) -> str:
         return self.user_message or self.message or ""
 
+    def get_images(self) -> List[str]:
+        if self.image_urls:
+            return self.image_urls
+        if self.image_url:
+            return [self.image_url]
+        return []
+
 
 class ElicitationResponse(BaseModel):
     session_id: str
@@ -87,6 +97,35 @@ class ElicitationResponse(BaseModel):
     proposed_rent: float
     approved: bool
     duration_months: int = 12
+
+
+@router.post("/chat/upload")
+async def upload_chat_file(files: Optional[List[UploadFile]] = File(None), file: Optional[UploadFile] = File(None)):
+    """Upload one or multiple receipt photos, bank slips, or property inspection images for multimodal agent verification."""
+    os.makedirs("web/static/uploads/receipts", exist_ok=True)
+    incoming_files = files or ([file] if file else [])
+    if not incoming_files:
+        raise HTTPException(status_code=400, detail="No files uploaded.")
+
+    saved_urls = []
+    saved_names = []
+
+    for f in incoming_files:
+        clean_name = f"{uuid.uuid4().hex[:8]}_{f.filename.replace(' ', '_')}"
+        target_path = os.path.join("web/static/uploads/receipts", clean_name)
+        with open(target_path, "wb") as buffer:
+            content = await f.read()
+            buffer.write(content)
+        public_url = f"/static/uploads/receipts/{clean_name}"
+        saved_urls.append(public_url)
+        saved_names.append(clean_name)
+
+    return {
+        "status": "success",
+        "image_urls": saved_urls,
+        "image_url": saved_urls[0] if saved_urls else "",
+        "filenames": saved_names
+    }
 
 
 @router.get("/chats")
@@ -144,7 +183,7 @@ async def delete_chat(session_id: str, db: AsyncSession = Depends(get_async_db))
 
 @router.post("/chat/stream")
 async def chat_stream_endpoint(req: StreamChatRequest, request: Request, db: AsyncSession = Depends(get_async_db)):
-    """SSE streaming endpoint for multi-turn autonomous agent execution."""
+    """SSE streaming endpoint for multi-turn autonomous agent execution with multimodal vision support."""
     user = await get_optional_user(request, db)
     repo = AsyncChatRepository(db)
     msg_text = req.get_message()
@@ -162,9 +201,15 @@ async def chat_stream_endpoint(req: StreamChatRequest, request: Request, db: Asy
         elif m.get("type") == "assistant" and m.get("content"):
             history_for_llm.append({"role": "assistant", "content": m["content"]})
 
-    # Save user message to database (auto-renames default session title)
+    # Save user message to database (with multiple image references if provided)
+    uploaded_images = req.get_images()
+    saved_msg_content = msg_text
+    if uploaded_images:
+        images_md = "\n".join([f"![Uploaded Document]({url})" for url in uploaded_images])
+        saved_msg_content = f"{msg_text}\n\n{images_md}" if msg_text else images_md
+
     await repo.update_chat_session_role(req.session_id, effective_role)
-    await repo.save_chat_message(session_id=req.session_id, msg_type="user", content=msg_text, user_id=effective_tenant_id)
+    await repo.save_chat_message(session_id=req.session_id, msg_type="user", content=saved_msg_content, user_id=effective_tenant_id)
 
     # Build dynamic, persona-grounded system prompt
     system_prompt = build_system_prompt(
@@ -203,7 +248,8 @@ async def chat_stream_endpoint(req: StreamChatRequest, request: Request, db: Asy
         system_prompt=system_prompt,
         conversation_history=history_for_llm,
         model=req.model,
-        role=req.role
+        role=req.role,
+        image_urls=uploaded_images
     )
 
     async def sse_wrapper():

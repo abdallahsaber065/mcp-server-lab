@@ -30,6 +30,8 @@ dist/
 .pnpm-store/
 platform/dist/
 web/dist/
+.vite/
+platform/.vite/
 
 # Private / Internal planning & teammate instructions (Untracked)
 docs/*team_execution_plan*.md

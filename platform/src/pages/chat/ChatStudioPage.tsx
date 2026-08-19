@@ -401,36 +401,39 @@ export const ChatStudioPage: React.FC = () => {
   };
 
   // Reusable core message streaming pipeline
-  const executeSendMessage = async (userText: string) => {
-    if (!userText.trim() || isStreaming) return;
+  const executeSendMessage = async (userText: string, attachedImages?: string[]) => {
+    if ((!userText.trim() && (!attachedImages || attachedImages.length === 0)) || isStreaming) return;
 
     const currentSid = activeSessionId || `session_${Date.now()}`;
+    setInputValue('');
+
+    const formattedContent = attachedImages && attachedImages.length > 0
+      ? (userText ? `${userText}\n\n${attachedImages.map(u => `![Uploaded Document](${u})`).join('\n')}` : attachedImages.map(u => `![Uploaded Document](${u})`).join('\n'))
+      : userText;
+
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       sender: 'user',
-      content: userText,
+      content: formattedContent,
     };
-
-    setMessages((prev) => [...prev, userMsg]);
-    setInputValue('');
-    setIsStreaming(true);
 
     const assistantMsgId = `asst-${Date.now()}`;
     const initialAssistantMsg: ChatMessage = {
       id: assistantMsgId,
       sender: 'assistant',
       content: '',
-      subtasks: [],
       toolTraces: [],
+      subtasks: [],
     };
 
-    setMessages((prev) => [...prev, initialAssistantMsg]);
+    setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
+    setIsStreaming(true);
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     // Update session title locally immediately if it's default
-    const titleSnippet = userText.length > 32 ? userText.slice(0, 32) + '...' : userText;
+    const titleSnippet = userText.length > 32 ? userText.slice(0, 32) + '...' : (userText || 'Document Verification');
     setSessions((prev) =>
       prev.map((s) =>
         s.session_id === currentSid && (!s.title || s.title === 'New conversation' || s.title === 'محادثة جديدة')
@@ -453,6 +456,7 @@ export const ChatStudioPage: React.FC = () => {
           session_id: currentSid,
           user_message: userText,
           message: userText,
+          image_urls: attachedImages || [],
           model: selectedModel,
           rag_strategy: selectedRag,
           role: user?.role || role || 'prospect',
@@ -613,9 +617,9 @@ export const ChatStudioPage: React.FC = () => {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await executeSendMessage(inputValue);
+  const handleSendMessage = async (e?: React.FormEvent, attachedImages?: string[]) => {
+    if (e) e.preventDefault();
+    await executeSendMessage(inputValue, attachedImages);
   };
 
   const handleDirectSendPrompt = async (prompt: string) => {

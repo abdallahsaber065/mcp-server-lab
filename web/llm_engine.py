@@ -181,9 +181,21 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
         conversation_history: List[Dict[str, Any]],
         model: Optional[str] = None,
         role: str = "property_manager",
-        max_rounds: int = 6
+        max_rounds: int = 6,
+        image_urls: Optional[List[str]] = None,
+        image_url: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
-        async for item in self.stream_agent_loop(mcp_server_instance, user_message, system_prompt, conversation_history, model, role, max_rounds):
+        all_images = image_urls or ([image_url] if image_url else [])
+        async for item in self.stream_agent_loop(
+            mcp_server_instance=mcp_server_instance,
+            user_message=user_message,
+            system_prompt=system_prompt,
+            conversation_history=conversation_history,
+            model=model,
+            role=role,
+            max_rounds=max_rounds,
+            image_urls=all_images
+        ):
             yield item
 
     async def stream_agent_loop(
@@ -194,10 +206,13 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
         conversation_history: List[Dict[str, Any]],
         model: Optional[str] = None,
         role: str = "property_manager",
-        max_rounds: int = 6
+        max_rounds: int = 6,
+        image_urls: Optional[List[str]] = None,
+        image_url: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """Async generator streaming Server-Sent Events (SSE) for UI real-time rendering."""
         target_model = model if model in AVAILABLE_MODELS else self.default_model
+        all_images = image_urls or ([image_url] if image_url else [])
 
         raw_tools = mcp_server_instance.list_tools(role=role)
         formatted_tools = []
@@ -212,7 +227,13 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
             })
 
         messages = [{"role": "system", "content": system_prompt}] + conversation_history
-        messages.append({"role": "user", "content": user_message})
+        if all_images:
+            user_content = [{"type": "text", "text": user_message}]
+            for img in all_images:
+                user_content.append({"type": "image_url", "image_url": {"url": img}})
+            messages.append({"role": "user", "content": user_content})
+        else:
+            messages.append({"role": "user", "content": user_message})
 
         for round_idx in range(max_rounds):
             try:
