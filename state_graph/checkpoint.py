@@ -4,7 +4,7 @@ Built on SQLAlchemy 2.0 ORM CheckpointRepository for PostgreSQL & SQLite persist
 """
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from db.session import SessionLocal
+from db.session import SessionLocal, init_sync_db
 from db.repositories.checkpoint_repo import CheckpointRepository
 from state_graph.models import GraphState
 
@@ -13,8 +13,11 @@ class DurableCheckpointer:
 
     def __init__(self, session: Optional[Session] = None):
         self._session_provided = session is not None
+        if not self._session_provided:
+            init_sync_db()
         self.session = session or SessionLocal()
         self.repo = CheckpointRepository(self.session)
+
 
     def save_checkpoint(self, state: GraphState) -> str:
         """Save a new state snapshot."""

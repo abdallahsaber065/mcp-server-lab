@@ -50,8 +50,9 @@ def main():
     new_graph = build_lease_flow_graph(checkpointer=reloaded_checkpointer)
     resumed_state = new_graph.run(saved_state)
     print(f"Resumed Run Status: {resumed_state.status}, Current Node: '{resumed_state.current_node}'")
-    print("✅ Flawless crash recovery verified! No completed steps were re-executed.")
+    print("[OK] Flawless crash recovery verified! No completed steps were re-executed.")
     reloaded_checkpointer.close()
+
 
 if __name__ == "__main__":
     main()
