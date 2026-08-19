@@ -102,14 +102,18 @@ class GeminiEmbeddingEngine:
 
     @staticmethod
     def _generate_deterministic_vector(text: str, dim: int = 768) -> List[float]:
-        """Generates deterministic pseudo-random unit vector based on text hash for reliable offline testing."""
-        vec = []
-        # Seeded pseudo-random generation from SHA256 chunks
-        for i in range(dim):
-            h = hashlib.sha256(f"{text}:{i}".encode("utf-8")).hexdigest()
-            # Map hex to float in [-1.0, 1.0]
-            val = (int(h[:8], 16) / 0xFFFFFFFF) * 2.0 - 1.0
-            vec.append(val)
+        """Generates deterministic token-hash projected unit vector for semantic offline ranking."""
+        vec = [0.0] * dim
+        import re
+        tokens = re.findall(r'\w+', text.lower())
+        if not tokens:
+            tokens = ["default"]
+
+        for token in tokens:
+            h_int = int(hashlib.md5(token.encode("utf-8")).hexdigest(), 16)
+            idx = h_int % dim
+            sign = 1.0 if (h_int // dim) % 2 == 0 else -1.0
+            vec[idx] += sign
 
         return GeminiEmbeddingEngine._normalize_vector(vec)
 

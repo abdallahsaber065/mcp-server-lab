@@ -11,12 +11,14 @@ from typing import Any, Dict
 from fastapi import APIRouter
 
 from mcp_server.server import CornerstoneMCPServer
+from rag.pipeline import POLICY_BINDER_CORPUS
 
-router = APIRouter(prefix="/api/showcase", tags=["Public Showcase"])
+router = APIRouter(prefix="/api", tags=["Public Showcase"])
 
 mcp_server = CornerstoneMCPServer()
 
 
+@router.get("/showcase/benchmarks")
 @router.get("/benchmarks")
 async def get_benchmarks():
     """Return empirical benchmark evaluation data across all agent & planning architectures."""
@@ -41,6 +43,7 @@ async def get_benchmarks():
     }
 
 
+@router.get("/showcase/system-stats")
 @router.get("/system-stats")
 async def get_system_stats():
     """Return system statistics, database engine mode, and capabilities."""
@@ -57,9 +60,24 @@ async def get_system_stats():
             "protocol_version": "2025-06-18",
             "database_engine": "SQLAlchemy 2.0 (SQLite WAL + Postgres Ready)",
             "cache_engine": "Redis 7 (Async + In-Memory Fallback)",
+            "vector_engine": "PGVector + Gemini Embedding 2 (768-dim MRL)",
             "total_tools": len(tools),
             "total_resources": len(resources),
             "total_prompts": len(prompts),
             "capabilities": caps.get("capabilities", {})
         }
+    }
+
+
+@router.get("/rag/documents")
+async def get_rag_documents(q: str = ""):
+    """Return indexed legal & policy binder corpus with optional search query filter."""
+    docs = POLICY_BINDER_CORPUS
+    if q.strip():
+        term = q.strip().lower()
+        docs = [d for d in docs if term in d.get("title", "").lower() or term in d.get("content", "").lower()]
+    return {
+        "status": "success",
+        "total": len(docs),
+        "documents": docs
     }

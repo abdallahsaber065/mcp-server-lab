@@ -1,6 +1,8 @@
 """
 Prompt Builder Service (web/services/prompt_builder.py)
-Constructs persona-aware, dynamically grounded system prompts for Cornerstone Realty autonomous agents.
+Constructs comprehensive, dynamically grounded, persona-aware system prompts
+for the Cornerstone Realty Autonomous AI Assistant across all roles and workflows.
+No hardcoded dummy IDs or fake leases — purely data-driven from DB state.
 """
 
 from typing import Any, Dict, Optional
@@ -16,132 +18,157 @@ def build_system_prompt(
     semantic_store: Optional[Any] = None,
     episodic_store: Optional[Any] = None,
 ) -> str:
-    """Builds dynamic, grounded system prompt injecting authentic DB persona identity and memory."""
+    """
+    Constructs a comprehensive system prompt dynamically populated with
+    authentic database state, user credentials, active leases, and memory records.
+    """
     db = next(get_sync_db())
     tenant_obj: Optional[Tenant] = None
+    assigned_unit_info: Optional[str] = None
+    active_lease_info: Optional[str] = None
 
     try:
+        # 1. Dynamically resolve user from DB
         if tenant_id:
             tenant_obj = db.get(Tenant, tenant_id)
         elif user_email:
             tenant_obj = db.query(Tenant).filter(Tenant.email == user_email).first()
-        elif role == "tenant":
-            tenant_obj = db.get(Tenant, 1)  # Default tenant: Dr. Tarek El-Mahdy
-        elif role == "property_manager":
-            tenant_obj = db.query(Tenant).filter(Tenant.role == "property_manager").first()
-        elif role == "executive_admin":
-            tenant_obj = db.query(Tenant).filter(Tenant.role == "executive_admin").first()
 
-        # Fallback values if DB lookup fails
-        if not tenant_obj:
-            if role == "executive_admin":
-                user_name = "Laila Fouad"
-                email = "laila.fouad@cornerstonerealty.eg"
-                phone = "+20 100 000 0001"
-                t_id = 9
-                assigned_unit = None
-            elif role == "property_manager":
-                user_name = "Tarek Mahmoud"
-                email = "tarek.m@cornerstonerealty.eg"
-                phone = "+20 122 333 4444"
-                t_id = 8
-                assigned_unit = None
-            else:
-                user_name = "Dr. Tarek El-Mahdy"
-                email = "tarek.mahdy@cairomed.org"
-                phone = "+20 100 123 4567"
-                t_id = 1
-                assigned_unit = "101-Garden"
-        else:
+        # 2. Extract authentic user attributes without fabricating fake defaults
+        if tenant_obj:
             user_name = tenant_obj.full_name
             email = tenant_obj.email
-            phone = tenant_obj.phone or "+20 100 000 0000"
+            phone = tenant_obj.phone or "Not provided"
             t_id = tenant_obj.tenant_id
-            assigned_unit = f"Unit {tenant_obj.assigned_unit_id}" if tenant_obj.assigned_unit_id else None
+            effective_role = tenant_obj.role or role
 
-        # Fetch lease details if tenant
-        active_lease: Optional[Lease] = None
-        if t_id:
-            active_lease = db.query(Lease).filter(Lease.tenant_id == t_id, Lease.is_active).first()
+            # Resolve assigned unit if present
+            if tenant_obj.assigned_unit_id:
+                unit = db.get(Unit, tenant_obj.assigned_unit_id)
+                if unit:
+                    prop = db.get(Property, unit.property_id) if unit.property_id else None
+                    prop_name = prop.name if prop else f"Property #{unit.property_id}"
+                    assigned_unit_info = f"Suite {unit.unit_number} at {prop_name} (Unit ID: {unit.unit_id})"
+                else:
+                    assigned_unit_info = f"Unit ID #{tenant_obj.assigned_unit_id}"
+
+            # Resolve active lease if present
+            active_lease = (
+                db.query(Lease)
+                .filter(Lease.tenant_id == t_id, Lease.is_active)
+                .first()
+            )
+            if active_lease:
+                active_lease_info = (
+                    f"Lease #{active_lease.lease_id} "
+                    f"(Monthly Rent: {active_lease.monthly_rent:,.0f} EGP, "
+                    f"Period: {active_lease.start_date} to {active_lease.end_date})"
+                )
+        else:
+            # Unauthenticated or Guest Prospect
+            user_name = "Prospective Resident / Guest"
+            email = user_email or "guest@cornerstonerealty.eg"
+            phone = "Not provided"
+            t_id = None
+            effective_role = role
 
     finally:
         db.close()
 
+    # --- AGENT CORE IDENTITY & REASONING FRAMEWORK ---
     prompt = (
-        f"You are the Cornerstone Realty Autonomous AI Assistant.\n"
-        f"CURRENT AUTHENTICATED USER PERSONA:\n"
-        f"- Full Name: {user_name}\n"
-        f"- System Role: {role.upper()}\n"
-        f"- Registered Email: {email}\n"
-        f"- Phone: {phone}\n"
-        f"- Tenant ID: {t_id}\n"
+        "You are the Cornerstone Realty Autonomous AI Assistant — an intelligent, context-aware "
+        "enterprise real estate operations agent, leasing advisor, and resident concierge.\n\n"
+        "=== AUTHENTICATED USER CONTEXT ===\n"
+        f"• User Name: {user_name}\n"
+        f"• Active Role: {effective_role.upper()}\n"
+        f"• User Email: {email}\n"
+        f"• Contact Phone: {phone}\n"
+        f"• Account ID: {t_id if t_id is not None else 'Unauthenticated / Guest'}\n"
     )
 
-    if role == "tenant":
-        unit_str = assigned_unit or "Unit 101"
-        lease_id_str = str(active_lease.lease_id) if active_lease else "1"
+    if assigned_unit_info:
+        prompt += f"• Assigned Resident Unit: {assigned_unit_info}\n"
+    if active_lease_info:
+        prompt += f"• Active Lease: {active_lease_info}\n"
+    prompt += "\n"
+
+    # --- ROLE-SPECIFIC OPERATIONAL BEHAVIORS ---
+    if effective_role == "tenant":
         prompt += (
-            f"- Assigned Unit: {unit_str}\n"
-            f"- Active Lease ID: {lease_id_str}\n\n"
-            "TENANT PERSONA BEHAVIOR & RULES:\n"
-            "1. Whenever the user asks about 'my lease', 'my rent', 'my apartment', or 'my maintenance tickets', "
-            f"you MUST use their authentic registered email: '{email}' or tenant_id: {t_id} or unit_id: {t_id}.\n"
-            f"2. NEVER use dummy/placeholder emails (like amr.hassan). Always use '{email}'.\n"
-            "3. If the tool returns lease or maintenance info, summarize it clearly with rent numbers and dates.\n\n"
+            "=== RESIDENT CONCIERGE WORKFLOWS ===\n"
+            "1. Tenant Inquiries: You assist the resident with their lease agreement, rent schedule, unit specifications, and community guidelines.\n"
+            "2. Maintenance & Repairs: When the resident reports an issue (e.g. plumbing, electrical, HVAC, appliances), gather details and submit a formal ticket. "
+            "Prioritize accurately (normal, urgent, emergency) and remind the tenant of our 48-hour standard resolution SLA.\n"
+            "3. Lease Services: Provide clear details on lease renewals, concession requests, or transfer policies upon resident inquiry.\n\n"
         )
-    elif role == "executive_admin":
+    elif effective_role == "executive_admin":
         prompt += (
-            "\nEXECUTIVE ADMIN BEHAVIOR:\n"
-            "You have full authority to approve high-value lease agreements (>50,000 EGP/month) requiring executive sign-off, "
-            "review portfolio-wide lease terms, approve concessions, and override constraints.\n\n"
+            "=== EXECUTIVE GOVERNANCE WORKFLOWS ===\n"
+            "1. Portfolio Oversight: You provide executive-level intelligence on occupancy rates, portfolio financial yields, and cross-property compliance.\n"
+            "2. High-Value Authorizations: You have authority to review and approve high-value luxury leases (>50,000 EGP/mo), custom concessions, and contract overrides.\n"
+            "3. Operational Governance: Audit property management performance, review escalated maintenance tickets, and track VIP prospect onboarding.\n\n"
+        )
+    elif effective_role == "property_manager":
+        prompt += (
+            "=== PROPERTY OPERATIONS & MANAGEMENT WORKFLOWS ===\n"
+            "1. Inventory & Unit Control: Query and manage residential and commercial units across properties, inspecting availability, pricing, and occupancy.\n"
+            "2. Tour Scheduling: Review, confirm, reschedule, or complete viewing tour appointments requested by prospective tenants.\n"
+            "3. Maintenance Dispatch: Triage tenant repair tickets, track vendor dispatch statuses, and ensure SLA compliance.\n"
+            "4. Lease Management: Update lease terms, review expiring agreements, and draft renewal proposals for manager sign-off.\n\n"
         )
     else:
+        # Public / Prospect
         prompt += (
-            "\nPROPERTY MANAGER BEHAVIOR:\n"
-            "You manage property operations, unit search/lookup, maintenance dispatch (48-hr SLA), and standard tenant communication.\n\n"
+            "=== PROSPECT LEASING & DISCOVERY WORKFLOWS ===\n"
+            "1. Property Discovery: Help prospective clients explore luxury apartments, penthouses, villas, and commercial spaces across Egypt.\n"
+            "2. Virtual & Accompanied Tours: Guide prospects to interactive 3D Matterport virtual walkthroughs and schedule accompanied in-person viewing appointments.\n"
+            "3. Tenancy Applications: Explain leasing requirements (2 months security deposit, verified ID, proof of income) and assist candidates in applying for available suites.\n\n"
         )
 
-    # Memory Subsystem Integration (Consolidated Semantic Facts & Recalled Episodes)
-    if semantic_store:
+    # --- MEMORY SUBSYSTEM INTEGRATION ---
+    if semantic_store and t_id:
         try:
             active_facts = semantic_store.get_active_facts(subject=f"tenant_{t_id}")
             if active_facts:
-                prompt += "\nACTIVE CONSOLIDATED TENANT FACTS (Semantic Memory):\n"
+                prompt += "=== CONSOLIDATED LONG-TERM MEMORY (Semantic Facts) ===\n"
                 for f in active_facts:
-                    prompt += f"- [{f['fact_key'].upper()}] {f['fact_value']} (v{f['version']})\n"
+                    prompt += f"• [{f['fact_key'].upper()}] {f['fact_value']} (v{f['version']})\n"
                 prompt += "\n"
         except Exception:
             pass
 
-    if episodic_store:
+    if episodic_store and t_id:
         try:
             episodes = episodic_store.query_episodes(entity_id=f"tenant_{t_id}", limit=4)
             if episodes:
-                prompt += "RECENT EPISODIC MEMORIES (Episodic Store):\n"
+                prompt += "=== RECENT EPISODIC MEMORIES (Past Interactions) ===\n"
                 for ep in episodes:
-                    prompt += f"- {ep['event_summary']} ({ep['timestamp'][:10] if ep.get('timestamp') else ''})\n"
+                    prompt += f"• {ep['event_summary']} ({ep['timestamp'][:10] if ep.get('timestamp') else ''})\n"
                 prompt += "\n"
         except Exception:
             pass
 
+    # --- DYNAMIC REASONING & TOOL USE PRINCIPLES ---
     prompt += (
-        "PROPERTY & UNIT DIRECTORY:\n"
-        "- Property ID 1: Nile Plaza Luxury Residences (Cairo, 12 El-Tahrir Square) — Units: 101 (unit_id: 101), 102 (102), 103 (103)\n"
-        "- Property ID 2: Alexandria Beachfront Towers (Alexandria, 45 Corniche El-Nile) — Units: 201 (unit_id: 201), 202 (202)\n"
-        "- Property ID 3: Giza Commercial & Residential Center (Giza, 88 Pyramids Road) — Units: 301 (unit_id: 301), 302 (302)\n"
-        "- Property ID 4: Zamalek Royal Suites (Cairo, 24 26th of July Street) — Units: 401 (unit_id: 401), 402 (402)\n"
-        "- Property ID 5: Gleem Bay Residence (Alexandria, 102 El-Geish Road, Gleem) — Units: 501 (unit_id: 501)\n"
-        "- Property ID 6: Red Sea Marina Villas (Hurghada, Marina Promenade) — Units: 601 (unit_id: 601)\n\n"
-        "CRITICAL MULTI-TOOL & REASONING RULES:\n"
-        "1. When submitting a maintenance ticket (`submit_maintenance_request`), ALWAYS use the tenant's assigned `unit_id` (e.g. `101`), NEVER the property_id.\n"
-        "2. Whenever answering a request, you MUST invoke the appropriate MCP tool(s) (lookup_available_units, submit_maintenance_request, modify_lease_terms, run_property_audit) to fetch or update real database records.\n"
-        "3. When the user requests a compliance or occupancy audit for a property (e.g. 'audit property 1'), IMMEDIATELY call the `run_property_audit` tool with `property_id: 1`.\n"
-        "4. If a request requires multiple actions (e.g. searching for available units THEN checking maintenance or modifying lease terms), execute multiple MCP tool calls iteratively.\n"
-        "5. Do NOT make up unit prices, lease numbers, or maintenance statuses.\n\n"
-        "OUTPUT FORMAT INSTRUCTIONS:\n"
-        "Format your final text responses strictly using clean, semantic HTML tags without markdown codeblock wrappers (no ```html). "
-        "Use <h3> for section titles, <p> for text, <ul>/<li> for lists, <strong> for emphasis, and <table>/<thead>/<tbody>/<tr>/<th>/<td> for structured tables. "
-        "This ensures rich rendering inside the portal interface."
+        "=== COGNITIVE ARCHITECTURE & OPERATING PRINCIPLES ===\n"
+        "1. Dynamic Grounding: You have access to a suite of MCP tools. NEVER hallucinate unit prices, lease dates, or availability from memory. "
+        "Always invoke the appropriate tools to query real database state or execute actions.\n"
+        "2. Multi-Step Execution: When a user request involves multiple steps (e.g. search available units, check pricing, then book a tour or file a request), "
+        "chain tool calls dynamically within your reasoning loop.\n"
+        "3. Security & Role Boundaries: Always operate within the permissions of the current authenticated user role.\n"
+        "4. Human-in-the-Loop Safeguards: For high-impact actions (such as legal contract modifications, financial concessions, or lease cancellations), "
+        "clearly present the proposed terms and request explicit confirmation before finalizing.\n\n"
+        "=== RESPONSE FORMATTING & INTERACTIVE UI DIRECTIVES ===\n"
+        "1. Text Formatting: Format conversational explanations using clean semantic HTML tags (<h3>, <p>, <ul>, <li>, <strong>, <table>) "
+        "without wrapping responses in ```html codeblocks.\n"
+        "2. Clean Natural Voice: Never cite internal technical RAG headers or strategy labels (such as 'GRAPH RAG CONTEXT', 'PGVECTOR CONTEXT', or 'NAIVE RAG') in your response. "
+        "Explain building rules, lease terms, and operational details naturally and authoritatively.\n"
+        "3. Interactive Unit Cards Component: When presenting or recommending available property units to the user, include a structured code block:\n"
+        "```units\n"
+        "[unit_id_1, unit_id_2, ...]\n"
+        "```\n"
+        "The frontend automatically intercepts this block to render interactive luxury cards with 3D Matterport tours, photo carousels, and 1-click lease application buttons.\n"
     )
 
     return prompt

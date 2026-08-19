@@ -279,6 +279,53 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
                         except Exception:
                             args = {}
 
+                        # Intercept high-consequence state-modifying actions for Human-in-the-Loop (HIL) confirmation
+                        if tool_name == "book_property_tour":
+                            conf_payload = {
+                                "action_type": "schedule_tour",
+                                "prompt": f"Please verify and confirm the tour schedule parameters for {args.get('contact_name', 'Guest')} at property #{args.get('property_id', 1)}.",
+                                "payload": args
+                            }
+                            conf_event = json.dumps({
+                                "type": "action_confirmation",
+                                "payload": conf_payload
+                            }, ensure_ascii=False)
+                            yield f"data: {conf_event}\n\n"
+                            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                            return
+
+                        elif tool_name == "submit_maintenance_request":
+                            conf_payload = {
+                                "action_type": "submit_maintenance",
+                                "prompt": f"Please review the maintenance work order dispatch for Unit #{args.get('unit_id', 101)} ({str(args.get('priority', 'normal')).upper()} priority).",
+                                "payload": args
+                            }
+                            conf_event = json.dumps({
+                                "type": "action_confirmation",
+                                "payload": conf_payload
+                            }, ensure_ascii=False)
+                            yield f"data: {conf_event}\n\n"
+                            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                            return
+
+                        elif tool_name == "modify_lease_terms":
+                            conf_payload = {
+                                "action_type": "modify_lease",
+                                "prompt": f"Executive approval required: Modify Lease #{args.get('lease_id', 1)} to proposed monthly rent EGP {args.get('new_monthly_rent', 0)}.",
+                                "payload": {
+                                    "lease_id": args.get("lease_id"),
+                                    "proposed_rent": args.get("new_monthly_rent"),
+                                    "duration_months": args.get("duration_months", 12)
+                                }
+                            }
+                            conf_event = json.dumps({
+                                "type": "action_confirmation",
+                                "payload": conf_payload
+                            }, ensure_ascii=False)
+                            yield f"data: {conf_event}\n\n"
+                            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                            return
+
                         tool_result = mcp_server_instance.call_tool(tool_name, args)
 
                         tool_event = json.dumps({

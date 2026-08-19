@@ -4,7 +4,6 @@ Replaces TA reference toolkit's randomized betavariate evaluator with real DB & 
 Returns EnvironmentFeedback(success: bool, score: float, details: list[str]).
 """
 
-import sqlite3
 from pathlib import Path
 
 from db.models import MaintenanceRequest

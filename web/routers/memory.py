@@ -19,9 +19,9 @@ from web.deps import get_current_user
 
 router = APIRouter(prefix="/api/memory", tags=["Memory"])
 
-# Global memory instances for FastAPI endpoints
-episodic_store = EpisodicStore(db_path="db/episodic_memory.db")
-semantic_store = SemanticMemoryStore(db_path="db/semantic_memory.db")
+# Global memory instances for FastAPI endpoints (Unified central database)
+episodic_store = EpisodicStore(db_path="central")
+semantic_store = SemanticMemoryStore(db_path="central")
 consolidation_engine = SemanticConsolidationEngine(episodic_store, semantic_store)
 memory_router = MemoryRouter(episodic_store)
 

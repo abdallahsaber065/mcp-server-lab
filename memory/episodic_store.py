@@ -1,46 +1,46 @@
 """
 Episodic Memory Store.
-Persists timestamped, context-rich historical events and conversations.
+Persists timestamped, context-rich historical events and conversations using SQLAlchemy ORM.
 Answers: What happened? Who was involved? When did it happen? Why did it happen?
 """
 
-import json
-import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import create_engine, select, update
+from sqlalchemy.orm import Session, sessionmaker
+
+from db.models import Base, EpisodicMemoryRecord
+from db.session import SyncSessionLocal, sync_engine
+
 
 class EpisodicStore:
-    def __init__(self, db_path: str = ":memory:"):
-        self.db_path = db_path
-        self._shared_conn = sqlite3.connect(":memory:", check_same_thread=False) if db_path == ":memory:" else None
-        self._init_db()
+    def __init__(self, db_path: str = ":memory:", session: Optional[Session] = None):
+        """
+        Initialize EpisodicStore.
+        If db_path == ':memory:' (default), creates an isolated in-memory SQLite engine for tests.
+        Otherwise, uses the application's central SQLAlchemy database (Postgres/SQLite).
+        """
+        if session:
+            self._external_session = True
+            self.session = session
+            self._session_factory = None
+        elif db_path == ":memory:":
+            self._external_session = False
+            engine = create_engine("sqlite:///:memory:", echo=False)
+            Base.metadata.create_all(engine)
+            self._session_factory = sessionmaker(bind=engine)
+            self.session = None
+        else:
+            self._external_session = False
+            self._session_factory = SyncSessionLocal
+            self.session = None
 
-    def _get_connection(self):
-        if self._shared_conn:
-            return self._shared_conn
-        return sqlite3.connect(self.db_path)
-
-    def _init_db(self):
-        conn = self._get_connection()
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS episodic_memory (
-                episode_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                entity_id TEXT NOT NULL,
-                session_id TEXT DEFAULT 'default',
-                timestamp DATETIME NOT NULL,
-                event_summary TEXT NOT NULL,
-                context TEXT,
-                outcome TEXT,
-                importance_score REAL DEFAULT 0.5,
-                consolidated INTEGER DEFAULT 0
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_episodic_entity ON episodic_memory(entity_id);")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_episodic_timestamp ON episodic_memory(timestamp);")
-        conn.commit()
-        if not self._shared_conn:
-            conn.close()
+    def _get_session(self) -> Session:
+        if self._external_session and self.session:
+            return self.session
+        assert self._session_factory is not None
+        return self._session_factory()
 
     def insert_episode(
         self,
@@ -52,59 +52,100 @@ class EpisodicStore:
         importance_score: float = 0.5,
         timestamp: Optional[str] = None,
     ) -> int:
-        ts = timestamp or datetime.now(timezone.utc).isoformat()
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO episodic_memory (entity_id, session_id, timestamp, event_summary, context, outcome, importance_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (entity_id, session_id, ts, event_summary, context, outcome, importance_score))
-        conn.commit()
-        last_id = cursor.lastrowid
-        if not self._shared_conn:
-            conn.close()
-        return int(last_id or 0)
+        if timestamp:
+            try:
+                dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            except Exception:
+                dt = datetime.now(timezone.utc)
+        else:
+            dt = datetime.now(timezone.utc)
+
+        session = self._get_session()
+        try:
+            record = EpisodicMemoryRecord(
+                entity_id=entity_id,
+                session_id=session_id,
+                timestamp=dt,
+                event_summary=event_summary,
+                context=context,
+                outcome=outcome,
+                importance_score=importance_score,
+                consolidated=0
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return record.episode_id
+        finally:
+            if not self._external_session:
+                session.close()
 
     def query_episodes(self, entity_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
-        conn = self._get_connection()
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        if entity_id:
-            cursor.execute("""
-                SELECT * FROM episodic_memory WHERE entity_id = ? ORDER BY timestamp DESC LIMIT ?
-            """, (entity_id, limit))
-        else:
-            cursor.execute("""
-                SELECT * FROM episodic_memory ORDER BY timestamp DESC LIMIT ?
-            """, (limit,))
-        rows = [dict(row) for row in cursor.fetchall()]
-        if not self._shared_conn:
-            conn.close()
-        return rows
+        session = self._get_session()
+        try:
+            stmt = select(EpisodicMemoryRecord)
+            if entity_id:
+                stmt = stmt.where(EpisodicMemoryRecord.entity_id == entity_id)
+            stmt = stmt.order_by(EpisodicMemoryRecord.timestamp.desc()).limit(limit)
+
+            rows = session.scalars(stmt).all()
+            return [
+                {
+                    "episode_id": r.episode_id,
+                    "entity_id": r.entity_id,
+                    "session_id": r.session_id,
+                    "timestamp": r.timestamp.isoformat() if r.timestamp else "",
+                    "event_summary": r.event_summary,
+                    "context": r.context,
+                    "outcome": r.outcome,
+                    "importance_score": r.importance_score,
+                    "consolidated": r.consolidated
+                }
+                for r in rows
+            ]
+        finally:
+            if not self._external_session:
+                session.close()
 
     def get_unconsolidated_episodes(self, entity_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        conn = self._get_connection()
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        if entity_id:
-            cursor.execute("""
-                SELECT * FROM episodic_memory WHERE consolidated = 0 AND entity_id = ? ORDER BY timestamp ASC
-            """, (entity_id,))
-        else:
-            cursor.execute("""
-                SELECT * FROM episodic_memory WHERE consolidated = 0 ORDER BY timestamp ASC
-            """)
-        rows = [dict(row) for row in cursor.fetchall()]
-        if not self._shared_conn:
-            conn.close()
-        return rows
+        session = self._get_session()
+        try:
+            stmt = select(EpisodicMemoryRecord).where(EpisodicMemoryRecord.consolidated == 0)
+            if entity_id:
+                stmt = stmt.where(EpisodicMemoryRecord.entity_id == entity_id)
+            stmt = stmt.order_by(EpisodicMemoryRecord.timestamp.asc())
+
+            rows = session.scalars(stmt).all()
+            return [
+                {
+                    "episode_id": r.episode_id,
+                    "entity_id": r.entity_id,
+                    "session_id": r.session_id,
+                    "timestamp": r.timestamp.isoformat() if r.timestamp else "",
+                    "event_summary": r.event_summary,
+                    "context": r.context,
+                    "outcome": r.outcome,
+                    "importance_score": r.importance_score,
+                    "consolidated": r.consolidated
+                }
+                for r in rows
+            ]
+        finally:
+            if not self._external_session:
+                session.close()
 
     def mark_consolidated(self, episode_ids: List[int]):
         if not episode_ids:
             return
-        placeholders = ",".join("?" for _ in episode_ids)
-        conn = self._get_connection()
-        conn.execute(f"UPDATE episodic_memory SET consolidated = 1 WHERE episode_id IN ({placeholders})", episode_ids)
-        conn.commit()
-        if not self._shared_conn:
-            conn.close()
+        session = self._get_session()
+        try:
+            stmt = (
+                update(EpisodicMemoryRecord)
+                .where(EpisodicMemoryRecord.episode_id.in_(episode_ids))
+                .values(consolidated=1)
+            )
+            session.execute(stmt)
+            session.commit()
+        finally:
+            if not self._external_session:
+                session.close()
