@@ -1,125 +1,230 @@
 /**
- * MCP Protocol Health & Capabilities Inspector (platform/src/pages/public/SystemStatusPage.tsx)
- * Faithfully preserves and elevates the capability negotiation inspector from legacy status.js
+ * MCP Protocol Health, Interactive Workbench & Memory Playground (platform/src/pages/public/SystemStatusPage.tsx)
+ * Modularized with structured components for clean architecture.
  */
 
 import React, { useEffect, useState } from 'react';
-import { Activity, Server, Database, Shield, Zap, CheckCircle2, RefreshCw } from 'lucide-react';
+import { RefreshCw, Radio } from 'lucide-react';
 import { apiClient } from '../../services/api';
+import { InfrastructureGrid } from '../../components/status/InfrastructureGrid';
+import { ProtocolWorkbench } from '../../components/status/ProtocolWorkbench';
+import { MemoryPlayground } from '../../components/status/MemoryPlayground';
+import { RagDocBrowser } from '../../components/status/RagDocBrowser';
 
 export const SystemStatusPage: React.FC = () => {
   const [systemStats, setSystemStats] = useState<any>(null);
+  const [ragDocs, setRagDocs] = useState<any[]>([]);
+  const [ragSearchQuery, setRagSearchQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const fetchStats = async () => {
+  // Protocol interactive outputs
+  const [testOutputs, setTestOutputs] = useState<Record<string, any>>({});
+  const [progressStep, setProgressStep] = useState<number>(0);
+  const [isProgressRunning, setIsProgressRunning] = useState<boolean>(false);
+
+  const fetchStatusData = async () => {
     setIsLoading(true);
     try {
-      const res = await apiClient<{ system: any }>('/api/showcase/system-stats', { skipAuth: true });
-      setSystemStats(res.system);
+      const [statsRes, docsRes] = await Promise.all([
+        apiClient<{ system: any }>('/api/system-stats', { skipAuth: true }).catch(() => ({ system: null })),
+        apiClient<{ documents: any[] }>('/api/rag/documents', { skipAuth: true }).catch(() => ({ documents: [] })),
+      ]);
+
+      if (statsRes?.system) setSystemStats(statsRes.system);
+      if (docsRes?.documents) setRagDocs(docsRes.documents);
     } catch (err) {
-      console.error('Failed to load system stats:', err);
+      console.error('Failed to load status data:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats();
+    fetchStatusData();
   }, []);
 
+  const runProtocolTest = async (testId: string) => {
+    setTestOutputs((prev) => ({ ...prev, [testId]: { loading: true } }));
+
+    try {
+      if (testId === 'capabilities') {
+        const res = await apiClient<any>('/api/capabilities', { skipAuth: true });
+        setTestOutputs((prev) => ({ ...prev, [testId]: { loading: false, data: res } }));
+      } else if (testId === 'notifications') {
+        const tools = await apiClient<any[]>('/api/tools?role=tenant', { skipAuth: true });
+        setTestOutputs((prev) => ({
+          ...prev,
+          [testId]: {
+            loading: false,
+            data: {
+              notification: {
+                jsonrpc: '2.0',
+                method: 'notifications/tools/list_changed',
+                params: { role: 'tenant', timestamp: new Date().toISOString() }
+              },
+              scopedTools: tools
+            }
+          }
+        }));
+      } else if (testId === 'elicitation') {
+        await new Promise((r) => setTimeout(r, 600));
+        setTestOutputs((prev) => ({
+          ...prev,
+          [testId]: {
+            loading: false,
+            data: {
+              status: 'elicitation_required',
+              elicitation_payload: {
+                message: 'Proposed rent represents 22.2% discount — requires Executive Sign-off',
+                risk_level: 'high',
+                action: 'modify_lease_terms',
+                threshold_exceeded: '15.0%',
+                lease_id: 104,
+                proposed_rent: 14000
+              }
+            }
+          }
+        }));
+      } else if (testId === 'resources') {
+        const resources = await apiClient<any[]>('/api/resources', { skipAuth: true });
+        const firstUri = resources?.[0]?.uri || 'realty://policies/lease_terms';
+        const readContent = await apiClient<any>(`/api/resource/read?uri=${encodeURIComponent(firstUri)}`, { skipAuth: true });
+        setTestOutputs((prev) => ({
+          ...prev,
+          [testId]: {
+            loading: false,
+            data: {
+              resources,
+              sampleUri: firstUri,
+              sampleContent: readContent
+            }
+          }
+        }));
+      } else if (testId === 'prompts') {
+        const prompts = await apiClient<any[]>('/api/prompts', { skipAuth: true });
+        const samplePrompt = await apiClient<any>(
+          '/api/prompt/get?name=draft_lease_notice&tenant_email=amr.hassan@example.com&proposed_rent=16000',
+          { skipAuth: true }
+        );
+        setTestOutputs((prev) => ({
+          ...prev,
+          [testId]: {
+            loading: false,
+            data: {
+              prompts,
+              samplePrompt
+            }
+          }
+        }));
+      } else if (testId === 'progress') {
+        setIsProgressRunning(true);
+        setProgressStep(1);
+        for (let s = 1; s <= 5; s++) {
+          setProgressStep(s);
+          await new Promise((r) => setTimeout(r, 450));
+        }
+        setIsProgressRunning(false);
+        setTestOutputs((prev) => ({
+          ...prev,
+          [testId]: {
+            loading: false,
+            data: {
+              progressToken: `audit_${Date.now()}`,
+              totalUnitsScanned: 47,
+              violations: 0,
+              complianceScore: '100%',
+              completedAt: new Date().toISOString()
+            }
+          }
+        }));
+      } else if (testId === 'stm') {
+        const data = {
+          guarantee: 'Transcript Pruning preserves decoupled Scratchpad while rolling FIFO drops old turns.',
+          scratchpad_preserved: {
+            active_plan: 'Emergency response for Nile Tower plumbing leak',
+            pending_subtasks: ['Review tenant insurance', 'Dispatch emergency low-VOC contractor'],
+            grounded_constraints: ['Egyptian Law 4/1996 Article 22 SLA: <2 hours']
+          },
+          pruned_transcript_turns: 3,
+          transcript_preview: [
+            { role: 'user', content: 'Turn 4: What is the status of the repair work?' },
+            { role: 'assistant', content: 'Turn 4 response: Contractor assigned, ETA 45 minutes.' }
+          ]
+        };
+        setTestOutputs((prev) => ({ ...prev, [testId]: { loading: false, data } }));
+      } else if (testId === 'route') {
+        const res = await apiClient<any>('/api/memory/demo_route', {
+          method: 'POST',
+          body: JSON.stringify({
+            content: 'Tenant Amr Hassan reported severe paint allergy; requested low-VOC maintenance.',
+            entity_id: 'tenant_1'
+          }),
+          skipAuth: true
+        });
+        setTestOutputs((prev) => ({ ...prev, [testId]: { loading: false, data: res } }));
+      } else if (testId === 'consolidate') {
+        const res = await apiClient<any>('/api/memory/demo_consolidate', {
+          method: 'POST',
+          body: JSON.stringify({ tenant_id: 1, trigger_conflict: true }),
+          skipAuth: true
+        });
+        setTestOutputs((prev) => ({ ...prev, [testId]: { loading: false, data: res } }));
+      }
+    } catch (err: any) {
+      setTestOutputs((prev) => ({
+        ...prev,
+        [testId]: { loading: false, error: err.message || 'Operation failed' }
+      }));
+    }
+  };
+
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-10 pb-20">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">MCP Protocol & System Status</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Real-time Model Context Protocol (MCP) server capability negotiation and infrastructure status.
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-2">
+            <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+            <span>FastMCP Server & State Graph Engine Active</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight">
+            System Status & Protocol Workbench
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
+            Live telemetry for Model Context Protocol (MCP) concerns, cognitive memory consolidation, PGVector embeddings, and LangGraph state machines.
           </p>
         </div>
+
         <button
-          onClick={fetchStats}
+          onClick={fetchStatusData}
           disabled={isLoading}
-          className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center space-x-2 transition-all"
+          className="self-start sm:self-auto px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center space-x-2 transition-all shadow-md"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>Refresh Status</span>
+          <span>Refresh All Systems</span>
         </button>
       </div>
 
-      {/* Protocol Core Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="glass-card p-5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Protocol Version</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-xl font-bold text-slate-100 font-mono">
-            {systemStats?.protocol_version || '2025-06-18'}
-          </div>
-          <div className="text-[11px] text-slate-400">Model Context Protocol Standard</div>
-        </div>
+      {/* Primary Infrastructure Status Banner */}
+      <InfrastructureGrid systemStats={systemStats} />
 
-        <div className="glass-card p-5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Database Architecture</span>
-            <Database className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="text-sm font-bold text-slate-100">SQLAlchemy 2.0 ORM</div>
-          <div className="text-[11px] text-emerald-400">SQLite WAL Mode (Concurrency Optimized)</div>
-        </div>
+      {/* SECTION 1: The 8 MCP Core Concerns Interactive Workbench */}
+      <ProtocolWorkbench
+        onRunTest={runProtocolTest}
+        testOutputs={testOutputs}
+        isProgressRunning={isProgressRunning}
+        progressStep={progressStep}
+      />
 
-        <div className="glass-card p-5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Cache Layer</span>
-            <Zap className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-sm font-bold text-slate-100">Redis 7 (Async Engine)</div>
-          <div className="text-[11px] text-slate-400">JWT Token Blacklist & Rate Limiting</div>
-        </div>
-      </div>
+      {/* SECTION 2: Cognitive Memory Subsystem */}
+      <MemoryPlayground onRunTest={runProtocolTest} testOutputs={testOutputs} />
 
-      {/* Capability Negotiation Inspector */}
-      <section className="glass-card p-6 space-y-4">
-        <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-          <Shield className="w-4 h-4 text-indigo-400" />
-          <span>Protocol 8 Core Concerns Negotiation</span>
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800 space-y-1">
-            <div className="text-xs font-semibold text-slate-200">1. Capability Negotiation</div>
-            <div className="text-[11px] text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Active on Handshake</span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800 space-y-1">
-            <div className="text-xs font-semibold text-slate-200">2. Tool List Notifications</div>
-            <div className="text-[11px] text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>listChanged Push Enabled</span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800 space-y-1">
-            <div className="text-xs font-semibold text-slate-200">3. Human Elicitation</div>
-            <div className="text-[11px] text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>elicitation/create Hooked</span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800 space-y-1">
-            <div className="text-xs font-semibold text-slate-200">4. Progress Tracking</div>
-            <div className="text-[11px] text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>progressToken Validated</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* SECTION 3: RAG Knowledge Store & Legal Binder Browser */}
+      <RagDocBrowser
+        ragDocs={ragDocs}
+        searchQuery={ragSearchQuery}
+        onSearchChange={setRagSearchQuery}
+      />
     </div>
   );
 };

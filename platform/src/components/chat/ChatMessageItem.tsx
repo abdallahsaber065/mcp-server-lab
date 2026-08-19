@@ -4,8 +4,11 @@ import { IntentBadge } from './IntentBadge';
 import { SubtaskCard } from './SubtaskCard';
 import { ToolTraceCard } from './ToolTraceCard';
 import { ElicitationCard } from './ElicitationCard';
-import { SelfRagBadge } from './SelfRagBadge';
-import { MemoryCard } from './MemoryCard';
+import { ActionConfirmationCard, ActionConfirmationPayload } from './ActionConfirmationCard';
+import { SelfRagBadge, SelfRagPayload } from './SelfRagBadge';
+import { MemoryCard, MemoryContextData } from './MemoryCard';
+import { ChatUnitsShowcase } from './ChatUnitsShowcase';
+import { ChatToursShowcase } from './ChatToursShowcase';
 import { RichContent } from '../common/RichContent';
 
 export interface ChatMessage {
@@ -34,31 +37,29 @@ export interface ChatMessage {
     lease_id?: number;
     proposed_rent?: number;
   };
-  selfRag?: {
-    is_relevant?: boolean;
-    is_supported?: boolean;
-    score?: number;
-    citations?: string[];
-  };
-  memory?: {
-    type?: string;
-    fact?: string;
-    action?: string;
-  };
+  confirmation?: ActionConfirmationPayload;
+  selfRag?: SelfRagPayload;
+  memory?: MemoryContextData;
 }
 
 interface ChatMessageItemProps {
   message: ChatMessage;
   userName?: string;
+  sessionId?: string;
   isStreaming?: boolean;
   onRespondElicitation: (leaseId: number, proposedRent: number, approved: boolean) => void;
+  onDirectSend?: (prompt: string) => void;
+  onActionResolved?: (finalAnswer: string) => void;
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   message,
   userName,
+  sessionId,
   isStreaming,
   onRespondElicitation,
+  onDirectSend,
+  onActionResolved,
 }) => {
   const [copied, setCopied] = useState(false);
   const isUser = message.sender === 'user';
@@ -68,6 +69,18 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Extract structured units from tool execution traces if present
+  const unitsFromTraces =
+    message.toolTraces
+      ?.filter((t) => t.tool === 'lookup_available_units' && t.result)
+      ?.flatMap((t) => (Array.isArray(t.result) ? t.result : t.result?.units || [])) || [];
+
+  // Extract tour bookings from tool traces if present
+  const toursFromTraces =
+    message.toolTraces
+      ?.filter((t) => t.tool === 'list_tour_bookings' && t.result)
+      ?.flatMap((t) => (Array.isArray(t.result) ? t.result : t.result?.bookings || [])) || [];
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-in fade-in duration-200`}>
@@ -114,8 +127,14 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           )}
         </div>
 
-        {/* Intent Router Badge (if present) */}
+        {/* Intent Router Badge */}
         {message.intent && <IntentBadge intent={message.intent} />}
+
+        {/* Memory Context Card */}
+        {message.memory && <MemoryCard memory={message.memory} />}
+
+        {/* Self-RAG Verification Badge */}
+        {message.selfRag && <SelfRagBadge selfRag={message.selfRag} />}
 
         {/* Subtask Planning Cards (Week 4) */}
         {message.subtasks && message.subtasks.length > 0 && (
@@ -135,23 +154,45 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           </div>
         )}
 
-        {/* Human Elicitation Card */}
-        {message.elicitation && (
+        {/* Interactive Real Estate Available Units Component */}
+        {unitsFromTraces.length > 0 && (
+          <ChatUnitsShowcase
+            units={unitsFromTraces}
+            initialLimit={3}
+            onDirectSend={onDirectSend}
+            isStreaming={isStreaming}
+          />
+        )}
+
+        {/* Interactive Tour Bookings Component */}
+        {toursFromTraces.length > 0 && (
+          <ChatToursShowcase tours={toursFromTraces} />
+        )}
+
+        {/* Human-in-the-Loop Action Confirmation Card */}
+        {message.confirmation && (
+          <ActionConfirmationCard
+            confirmation={message.confirmation}
+            sessionId={sessionId}
+            onResolved={(finalAnswer) => onActionResolved?.(finalAnswer)}
+          />
+        )}
+
+        {/* Human Elicitation Card (Fallback / Lease Terms) */}
+        {!message.confirmation && message.elicitation && (
           <ElicitationCard
             elicitation={message.elicitation}
             onRespond={onRespondElicitation}
           />
         )}
 
-        {/* Self-RAG Verification Badge */}
-        {message.selfRag && <SelfRagBadge selfRag={message.selfRag} />}
-
-        {/* Memory Consolidation Card */}
-        {message.memory && <MemoryCard memory={message.memory} />}
-
         {/* Main Text Content */}
         {message.content ? (
-          <RichContent content={message.content} />
+          <RichContent
+            content={message.content}
+            onDirectSend={onDirectSend}
+            isStreaming={isStreaming}
+          />
         ) : isStreaming ? (
           <div className="text-xs sm:text-sm text-indigo-300 italic flex items-center space-x-2 animate-pulse">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping" />

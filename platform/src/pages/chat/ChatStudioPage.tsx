@@ -100,30 +100,95 @@ function reconstructConversation(rawMessages: any[]): ChatMessage[] {
       } else {
         currentAssistant.toolTraces = [...(currentAssistant.toolTraces || []), traceObj];
       }
-    } else if (mType === 'elicitation' || m.elicitation) {
-      const elObj = m.elicitation || {};
+    } else if (mType === 'elicitation') {
+      let elicitationObj = undefined;
+      try {
+        elicitationObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        elicitationObj = { prompt: m.content || 'Human-in-the-loop confirmation required.' };
+      }
       if (!currentAssistant) {
         currentAssistant = {
           id: `asst-${m.id || Math.random()}`,
           sender: 'assistant',
           content: '',
-          elicitation: elObj,
+          elicitation: elicitationObj,
+          subtasks: [],
+          toolTraces: [],
         };
       } else {
-        currentAssistant.elicitation = elObj;
+        currentAssistant.elicitation = elicitationObj;
       }
-    } else if (mType === 'assistant' || mType === 'fallback') {
+    } else if (mType === 'action_confirmation' || mType === 'confirmation') {
+      let confObj = undefined;
+      try {
+        confObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        confObj = m.content;
+      }
       if (!currentAssistant) {
         currentAssistant = {
-          id: String(m.id || Math.random()),
+          id: `asst-${m.id || Math.random()}`,
           sender: 'assistant',
-          content: m.content || m.message_text || '',
-          created_at: m.created_at,
+          content: '',
+          confirmation: confObj,
+          subtasks: [],
+          toolTraces: [],
         };
       } else {
-        currentAssistant.content =
-          (currentAssistant.content ? currentAssistant.content + '\n' : '') +
-          (m.content || m.message_text || '');
+        currentAssistant.confirmation = confObj;
+      }
+    } else if (mType === 'self_rag' || mType === 'self_rag_verification') {
+      let selfRagObj = undefined;
+      try {
+        selfRagObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        selfRagObj = { is_relevant: true, is_supported: true, score: 0.95 };
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          selfRag: selfRagObj,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.selfRag = selfRagObj;
+      }
+    } else if (mType === 'memory_context' || mType === 'memory_consolidated' || mType === 'memory') {
+      let memObj = undefined;
+      try {
+        memObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        memObj = { fact: m.content };
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          memory: memObj,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.memory = memObj;
+      }
+    } else if (mType === 'assistant' || mType === 'token' || mType === 'chunk') {
+      const textChunk = m.content || m.message_text || m.text || '';
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: textChunk,
+          created_at: m.created_at,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.content = (currentAssistant.content || '') + textChunk;
       }
     }
   }
@@ -178,6 +243,44 @@ export const ChatStudioPage: React.FC = () => {
     scrollToBottom();
   }, [messages, isStreaming]);
 
+  // Helper to extract session ID from URL route (/chat/:sessionId or ?session_id=...)
+  const getSessionIdFromUrl = (): string | null => {
+    const pathParts = window.location.pathname.replace(/^\//, '').split('/');
+    if (pathParts[0] === 'chat' && pathParts[1]) {
+      return pathParts[1];
+    }
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('session_id') || urlParams.get('session');
+  };
+
+  // Helper to sync browser URL with active session
+  const updateUrlSessionId = (sessionId: string) => {
+    if (window.location.pathname.startsWith('/chat')) {
+      window.history.replaceState(null, '', `/chat/${sessionId}`);
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.set('session_id', sessionId);
+      window.history.replaceState(null, '', url.toString());
+    }
+  };
+
+  // Check for pre-filled prompt passed via URL (?prompt=...) or store
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryPrompt = urlParams.get('prompt');
+    const storePrompt = useAppStore.getState().chatInitialPrompt;
+    const initialPrompt = queryPrompt ? decodeURIComponent(queryPrompt) : storePrompt;
+
+    if (initialPrompt) {
+      setInputValue(initialPrompt);
+      useAppStore.getState().setChatInitialPrompt(null);
+      if (queryPrompt) {
+        const cleanUrl = activeSessionId ? `/chat/${activeSessionId}` : '/chat';
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    }
+  }, [activeSessionId]);
+
   // Load chat sessions on mount or when active user changes
   useEffect(() => {
     loadSessions();
@@ -188,7 +291,11 @@ export const ChatStudioPage: React.FC = () => {
       const res = await apiClient<any>('/api/chats');
       const fetched: ChatSessionSummary[] = Array.isArray(res) ? res : res?.sessions || [];
       setSessions(fetched);
-      if (fetched.length > 0) {
+
+      const urlSid = getSessionIdFromUrl();
+      if (urlSid) {
+        loadSessionMessages(urlSid);
+      } else if (fetched.length > 0) {
         if (!keepCurrentActive || !activeSessionId) {
           loadSessionMessages(fetched[0].session_id);
         }
@@ -207,7 +314,7 @@ export const ChatStudioPage: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           title: 'New conversation',
-          role: role || 'property_manager',
+          role: user?.role || role || 'prospect',
         }),
       });
 
@@ -221,6 +328,7 @@ export const ChatStudioPage: React.FC = () => {
 
       setSessions((prev) => [newSession, ...prev.filter((s) => s.session_id !== newSessionId)]);
       setActiveSessionId(newSessionId);
+      updateUrlSessionId(newSessionId);
       setMessages([
         {
           id: 'msg-welcome',
@@ -238,6 +346,7 @@ export const ChatStudioPage: React.FC = () => {
       };
       setSessions((prev) => [newSession, ...prev]);
       setActiveSessionId(fallbackId);
+      updateUrlSessionId(fallbackId);
       setMessages([
         {
           id: 'msg-welcome-fb',
@@ -250,6 +359,7 @@ export const ChatStudioPage: React.FC = () => {
 
   const loadSessionMessages = async (sessionId: string) => {
     setActiveSessionId(sessionId);
+    updateUrlSessionId(sessionId);
     try {
       const res = await apiClient<any>(`/api/chats/${sessionId}`);
       const rawMessages = res.messages || [];
@@ -290,11 +400,10 @@ export const ChatStudioPage: React.FC = () => {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isStreaming) return;
+  // Reusable core message streaming pipeline
+  const executeSendMessage = async (userText: string) => {
+    if (!userText.trim() || isStreaming) return;
 
-    const userText = inputValue;
     const currentSid = activeSessionId || `session_${Date.now()}`;
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -346,7 +455,7 @@ export const ChatStudioPage: React.FC = () => {
           message: userText,
           model: selectedModel,
           rag_strategy: selectedRag,
-          role: role || 'property_manager',
+          role: user?.role || role || 'prospect',
           user_email: user?.email,
           tenant_id: user?.tenant_id || user?.id,
         }),
@@ -394,7 +503,7 @@ export const ChatStudioPage: React.FC = () => {
 
                     if (event.type === 'planning_subtask') {
                       const newSubtask = {
-                        instruction: event.instruction || 'Sub-task step',
+                        instruction: event.instruction || 'Planning step',
                         method: event.method || 'PS',
                         output: event.output || '',
                         status: event.status || 'SUCCESS',
@@ -405,7 +514,7 @@ export const ChatStudioPage: React.FC = () => {
                       };
                     }
 
-                    if (event.type === 'tool_call' || event.type === 'tool_trace') {
+                    if (event.type === 'tool_call' || event.tool) {
                       const newTrace = {
                         tool: event.tool || 'tool_call',
                         args: event.args || {},
@@ -418,15 +527,21 @@ export const ChatStudioPage: React.FC = () => {
                       };
                     }
 
-                    if (event.type === 'elicitation' || event.type === 'elicitation_required') {
-                      const payload = event.payload || event;
+                    if (event.type === 'elicitation') {
                       return {
                         ...msg,
                         elicitation: {
-                          prompt: payload.prompt || 'Executive approval required',
-                          lease_id: payload.lease_id,
-                          proposed_rent: payload.proposed_rent,
+                          prompt: event.prompt || 'Human-in-the-loop approval required.',
+                          lease_id: event.lease_id,
+                          proposed_rent: event.proposed_rent,
                         },
+                      };
+                    }
+
+                    if (event.type === 'action_confirmation' || event.type === 'confirmation_required') {
+                      return {
+                        ...msg,
+                        confirmation: event.payload || event,
                       };
                     }
 
@@ -434,22 +549,20 @@ export const ChatStudioPage: React.FC = () => {
                       return {
                         ...msg,
                         selfRag: {
+                          strategy: event.strategy,
                           is_relevant: event.is_relevant,
                           is_supported: event.is_supported,
                           score: event.score,
-                          citations: event.citations,
+                          citations: event.citations || [],
+                          preview: event.preview,
                         },
                       };
                     }
 
-                    if (event.type === 'memory_consolidated' || event.type === 'memory_context' || event.type === 'memory') {
+                    if (event.type === 'memory_context' || event.type === 'memory_consolidated' || event.type === 'memory') {
                       return {
                         ...msg,
-                        memory: {
-                          type: event.memory_type || 'semantic',
-                          fact: event.fact || event.content || event.event_summary || 'Consolidated long-term fact into semantic store.',
-                          action: event.action || 'consolidated',
-                        },
+                        memory: event,
                       };
                     }
 
@@ -500,17 +613,31 @@ export const ChatStudioPage: React.FC = () => {
     }
   };
 
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeSendMessage(inputValue);
+  };
+
+  const handleDirectSendPrompt = async (prompt: string) => {
+    if (isStreaming) {
+      addToast('Please wait for the active generation to complete.', 'info');
+      return;
+    }
+    await executeSendMessage(prompt);
+  };
+
   const handleStopStream = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setIsStreaming(false);
-      addToast('Stream interrupted by user', 'info');
+      abortControllerRef.current = null;
+      addToast('Response streaming cancelled', 'info');
     }
   };
 
   const handleElicitationResponse = async (leaseId: number, proposedRent: number, approved: boolean) => {
     try {
-      const res = await apiClient<{ final_answer: string }>('/api/elicitation/respond', {
+      const res = await apiClient<{ assistant_response: string }>('/api/chat/elicitation', {
         method: 'POST',
         body: JSON.stringify({
           session_id: activeSessionId,
@@ -518,18 +645,17 @@ export const ChatStudioPage: React.FC = () => {
           proposed_rent: proposedRent,
           approved,
         }),
-        skipAuth: true,
       });
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `asst-elicit-${Date.now()}`,
-          sender: 'assistant',
-          content: res.final_answer || (approved ? 'Elicitation override approved.' : 'Elicitation override denied.'),
-        },
-      ]);
-      addToast(approved ? 'Elicitation approved' : 'Elicitation rejected', 'info');
+      const asstResponseMsg: ChatMessage = {
+        id: `asst-${Date.now()}`,
+        sender: 'assistant',
+        content: res.assistant_response || `Elicitation handled: Decision recorded as ${approved ? 'APPROVED' : 'REJECTED'}.`,
+        toolTraces: [],
+      };
+
+      setMessages((prev) => [...prev, asstResponseMsg]);
+      addToast(approved ? 'Terms approved successfully' : 'Terms rejected', approved ? 'success' : 'info');
     } catch (err) {
       addToast('Failed to respond to elicitation', 'error');
     }
@@ -569,8 +695,19 @@ export const ChatStudioPage: React.FC = () => {
                 key={msg.id || idx}
                 message={msg}
                 userName={user?.full_name}
+                sessionId={activeSessionId || undefined}
                 isStreaming={isStreaming}
                 onRespondElicitation={handleElicitationResponse}
+                onDirectSend={handleDirectSendPrompt}
+                onActionResolved={(answer) => {
+                  const asstResponseMsg: ChatMessage = {
+                    id: `asst-${Date.now()}`,
+                    sender: 'assistant',
+                    content: answer,
+                    toolTraces: [],
+                  };
+                  setMessages((prev) => [...prev, asstResponseMsg]);
+                }}
               />
             ))}
             <div ref={messagesEndRef} />

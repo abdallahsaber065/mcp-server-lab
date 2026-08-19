@@ -72,21 +72,29 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="max-w-4xl mx-auto flex items-center space-x-3">
-        <input
-          type="text"
+      <form onSubmit={onSubmit} className="max-w-4xl mx-auto flex items-end space-x-3">
+        <textarea
+          rows={Math.min(4, Math.max(1, inputValue.split('\n').length))}
           value={inputValue}
           onChange={(e) => onChangeInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (inputValue.trim() && !isStreaming) {
+                onSubmit(e);
+              }
+            }
+          }}
           placeholder={`Ask anything as ${role?.replace('_', ' ')} (e.g. units, lease terms, audits)...`}
           disabled={isStreaming}
-          className="flex-1 px-4 py-3 rounded-xl bg-slate-950/90 border border-slate-700/80 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 transition-all"
+          className="flex-1 px-4 py-2.5 rounded-xl bg-slate-950/90 border border-slate-700/80 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 transition-all resize-none leading-relaxed"
         />
 
         {isStreaming ? (
           <button
             type="button"
             onClick={onStopStream}
-            className="px-4 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-rose-600/30 transition-all"
+            className="px-4 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-rose-600/30 transition-all shrink-0"
             title="Interrupt Generation"
           >
             <StopCircle className="w-4 h-4 animate-pulse" />
@@ -96,7 +104,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           <button
             type="submit"
             disabled={!inputValue.trim()}
-            className="px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-indigo-600/30 border border-indigo-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-indigo-600/30 border border-indigo-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >
             <Send className="w-4 h-4" />
             <span className="hidden sm:inline">Send</span>

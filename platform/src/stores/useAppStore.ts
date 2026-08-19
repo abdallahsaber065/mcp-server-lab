@@ -26,7 +26,10 @@ interface AppState {
   isSidebarOpen: boolean;
   theme: 'dark' | 'light';
   toasts: ToastMessage[];
+  chatInitialPrompt: string | null;
   setCurrentPage: (page: AppPage) => void;
+  setChatInitialPrompt: (prompt: string | null) => void;
+  navigateToChatWithPrompt: (prompt: string) => void;
   toggleSidebar: () => void;
   setTheme: (theme: 'dark' | 'light') => void;
   addToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
@@ -57,6 +60,16 @@ export const useAppStore = create<AppState>((set) => ({
   })(),
   theme: 'dark',
   toasts: [],
+  chatInitialPrompt: null,
+
+  setChatInitialPrompt: (prompt) => set({ chatInitialPrompt: prompt }),
+
+  navigateToChatWithPrompt: (prompt) => {
+    localStorage.setItem('cornerstone_page', 'chat');
+    const encoded = encodeURIComponent(prompt);
+    window.history.pushState({ page: 'chat' }, '', `/chat?prompt=${encoded}`);
+    set({ currentPage: 'chat', chatInitialPrompt: prompt });
+  },
 
   setCurrentPage: (page) => {
     localStorage.setItem('cornerstone_page', page);

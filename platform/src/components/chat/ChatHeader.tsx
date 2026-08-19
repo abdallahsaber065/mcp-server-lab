@@ -1,5 +1,6 @@
 import React from 'react';
-import { MessageSquare, Cpu, Database } from 'lucide-react';
+import { MessageSquare, Cpu, Database, UserCheck, Shield } from 'lucide-react';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 interface ChatHeaderProps {
   isSidebarOpen: boolean;
@@ -18,6 +19,24 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   selectedRag,
   onChangeRag,
 }) => {
+  const { user, role } = useAuthStore();
+  const effectiveRole = user?.role || role || 'prospect';
+
+  const getRoleBadge = () => {
+    switch (effectiveRole) {
+      case 'executive_admin':
+        return { label: 'Executive Admin', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' };
+      case 'property_manager':
+        return { label: 'Property Manager', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' };
+      case 'tenant':
+        return { label: 'Resident Tenant', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' };
+      default:
+        return { label: 'Guest / Prospect', color: 'bg-slate-800 text-slate-300 border-slate-700' };
+    }
+  };
+
+  const badge = getRoleBadge();
+
   return (
     <div className="h-14 border-b border-slate-800/80 px-4 flex items-center justify-between bg-slate-900/70 backdrop-blur-md shrink-0 select-none">
       <div className="flex items-center space-x-3">
@@ -31,7 +50,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs font-bold text-slate-200">Cornerstone Autonomous Agent Studio</span>
+          <span className="text-xs font-bold text-slate-200 hidden sm:inline">Cornerstone Autonomous Agent Studio</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.color} flex items-center space-x-1`}
+            title={user?.email ? `Authenticated as ${user.email}` : 'Unauthenticated Guest'}
+          >
+            <Shield className="w-2.5 h-2.5" />
+            <span>{badge.label}</span>
+          </span>
         </div>
       </div>
 
