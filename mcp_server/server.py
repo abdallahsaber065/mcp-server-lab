@@ -13,7 +13,6 @@ from db.models import Property, Unit
 from db.session import get_sync_db, init_sync_db
 from mcp_server.db_helpers import (
     create_maintenance_record,
-    get_db_connection,
     init_db,
     query_available_units,
     query_tenant_lease,
@@ -21,9 +20,18 @@ from mcp_server.db_helpers import (
 )
 
 # Week 3: rag/ and memory/ moved to top-level packages (rag/, memory/)
-# Old mcp_server/rag and mcp_server/memory removed — see Week 3 instruction files
+from db.repositories.tour_repo import TourRepository
 from mcp_server.notifications import ToolListChangedNotification, dispatcher
-from mcp_server.schemas import BatchAuditArgs, LookupLeaseArgs, MaintenanceRequestArgs, ModifyLeaseArgs, QueryUnitsArgs
+from mcp_server.schemas import (
+    BatchAuditArgs,
+    BookTourArgs,
+    ListToursArgs,
+    LookupLeaseArgs,
+    MaintenanceRequestArgs,
+    ModifyLeaseArgs,
+    QueryUnitsArgs,
+    UpdateTourStatusArgs,
+)
 from services.lease_service import LeaseService
 from services.maintenance_service import MaintenanceService
 from services.property_service import PropertyService
@@ -97,10 +105,25 @@ class CornerstoneMCPServer:
                 "description": "File a maintenance or repair ticket for a property unit.",
                 "inputSchema": MaintenanceRequestArgs.model_json_schema()
             },
+            {
+                "name": "book_property_tour",
+                "description": "Schedule an in-person, 3D Matterport guided, or self-guided viewing appointment for a property or unit.",
+                "inputSchema": BookTourArgs.model_json_schema()
+            },
+            {
+                "name": "list_tour_bookings",
+                "description": "List scheduled property viewing appointments with status and date filters.",
+                "inputSchema": ListToursArgs.model_json_schema()
+            },
         ]
 
         # Role-gated write tools (Demonstrates Notifications & defensive auth)
         if active_role in ("property_manager", "executive_admin"):
+            all_tools.append({
+                "name": "update_tour_status",
+                "description": "Approve, reschedule, complete, or cancel a prospect tour booking.",
+                "inputSchema": UpdateTourStatusArgs.model_json_schema()
+            })
             all_tools.append({
                 "name": "modify_lease_terms",
                 "description": "Update lease terms or monthly rent. Triggers human elicitation if discount > 15% or high value.",
@@ -212,6 +235,50 @@ class CornerstoneMCPServer:
                     priority=validated.priority
                 )
                 return {"status": "success", "result": res}
+
+            elif name == "book_property_tour":
+                validated = BookTourArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    booking = repo.create_booking(
+                        property_id=validated.property_id,
+                        unit_id=validated.unit_id,
+                        contact_name=validated.contact_name,
+                        contact_email=validated.contact_email,
+                        contact_phone=validated.contact_phone,
+                        tour_type=validated.tour_type,
+                        requested_date=validated.requested_date,
+                        time_slot=validated.time_slot,
+                        notes=validated.notes
+                    )
+                    return {
+                        "status": "success",
+                        "message": f"Tour booked successfully for {booking['contact_name']} at {booking['property_name']} on {booking['requested_date']} at {booking['time_slot']}.",
+                        "booking": booking
+                    }
+
+            elif name == "list_tour_bookings":
+                validated = ListToursArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    bookings = repo.list_bookings(
+                        property_id=validated.property_id,
+                        status=validated.status
+                    )
+                    return {"status": "success", "bookings": bookings, "count": len(bookings)}
+
+            elif name == "update_tour_status":
+                validated = UpdateTourStatusArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    updated = repo.update_status(
+                        booking_id=validated.booking_id,
+                        status=validated.status,
+                        manager_notes=validated.manager_notes
+                    )
+                    if not updated:
+                        return {"status": "not_found", "message": f"Tour booking #{validated.booking_id} not found."}
+                    return {"status": "success", "message": f"Tour booking #{validated.booking_id} updated to '{validated.status}'.", "booking": updated}
 
             elif name == "modify_lease_terms":
                 validated = ModifyLeaseArgs(**arguments)

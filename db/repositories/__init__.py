@@ -12,6 +12,7 @@ from db.repositories.property_repo import AsyncPropertyRepository, PropertyRepos
 from db.repositories.tenant_repo import AsyncTenantRepository, TenantRepository
 from db.repositories.ticket_repo import AsyncTicketRepository, TicketRepository
 from db.repositories.tool_binding_repo import AsyncToolBindingRepository, ToolBindingRepository
+from db.repositories.tour_repo import TourRepository
 
 __all__ = [
     "BaseRepository", "AsyncBaseRepository",
@@ -22,5 +23,6 @@ __all__ = [
     "CheckpointRepository", "AsyncCheckpointRepository",
     "HITLRepository", "AsyncHITLRepository",
     "TicketRepository", "AsyncTicketRepository",
-    "ToolBindingRepository", "AsyncToolBindingRepository"
+    "ToolBindingRepository", "AsyncToolBindingRepository",
+    "TourRepository",
 ]

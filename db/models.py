@@ -54,7 +54,15 @@ class Property(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     address: Mapped[str] = mapped_column(String(200), nullable=False)
     city: Mapped[str] = mapped_column(String(50), nullable=False)
+    neighborhood: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     property_type: Mapped[str] = mapped_column(String(50), default="residential")
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    images: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list
+    amenities: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list
+    year_built: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
+    virtual_tour_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     total_units: Mapped[int] = mapped_column(Integer, default=1)
     occupancy_rate: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -68,9 +76,17 @@ class Unit(Base):
     unit_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     property_id: Mapped[int] = mapped_column(Integer, ForeignKey("properties.property_id"), nullable=False)
     unit_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    images: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list
     bedrooms: Mapped[int] = mapped_column(Integer, default=1)
     bathrooms: Mapped[float] = mapped_column(Float, default=1.0)
     square_feet: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    floor_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    features: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list
+    pet_policy: Mapped[Optional[str]] = mapped_column(String(50), default="Allowed")
+    virtual_tour_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     monthly_rent: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="available")  # available, occupied, maintenance, reserved
     is_high_value: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -251,4 +267,58 @@ class RagDocumentEmbedding(Base):
     target_tenant_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class EpisodicMemoryRecord(Base):
+    __tablename__ = "episodic_memory"
+
+    episode_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(String(100), default="default")
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    event_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    context: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    outcome: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    importance_score: Mapped[float] = mapped_column(Float, default=0.5)
+    consolidated: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class SemanticFactRecord(Base):
+    __tablename__ = "semantic_memory"
+
+    fact_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    fact_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    fact_value: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(30), default="active")  # active, superseded, expired
+    valid_from: Mapped[str] = mapped_column(String(50), nullable=False)
+    valid_to: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.9)
+    evidence_episode_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list
+    superseded_by_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+class TourBooking(Base):
+    __tablename__ = "tour_bookings"
+
+    booking_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    property_id: Mapped[int] = mapped_column(Integer, ForeignKey("properties.property_id"), nullable=False)
+    unit_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("units.unit_id"), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.tenant_id"), nullable=True)
+    contact_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    contact_email: Mapped[str] = mapped_column(String(120), nullable=False)
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tour_type: Mapped[str] = mapped_column(String(30), default="in_person")  # in_person, virtual_guided, 3d_self_guided
+    requested_date: Mapped[str] = mapped_column(String(50), nullable=False)
+    time_slot: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="pending")  # pending, confirmed, rescheduled, completed, cancelled
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    manager_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    property: Mapped["Property"] = relationship("Property")
+    unit: Mapped[Optional["Unit"]] = relationship("Unit")
+    user: Mapped[Optional["Tenant"]] = relationship("Tenant")
+
 

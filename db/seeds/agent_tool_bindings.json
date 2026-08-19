@@ -20,6 +20,21 @@
     "is_enabled": true
   },
   {
+    "agent_id": "commercial_lease_agent",
+    "tool_name": "book_property_tour",
+    "is_enabled": true
+  },
+  {
+    "agent_id": "commercial_lease_agent",
+    "tool_name": "list_tour_bookings",
+    "is_enabled": true
+  },
+  {
+    "agent_id": "commercial_lease_agent",
+    "tool_name": "update_tour_status",
+    "is_enabled": true
+  },
+  {
     "agent_id": "renovation_permit_agent",
     "tool_name": "lookup_available_units",
     "is_enabled": true
@@ -58,6 +73,21 @@
     "agent_id": "tenant_support_agent",
     "tool_name": "submit_maintenance_request",
     "is_enabled": true
+  },
+  {
+    "agent_id": "tenant_support_agent",
+    "tool_name": "book_property_tour",
+    "is_enabled": true
+  },
+  {
+    "agent_id": "tenant_support_agent",
+    "tool_name": "list_tour_bookings",
+    "is_enabled": true
+  },
+  {
+    "agent_id": "tenant_support_agent",
+    "tool_name": "update_tour_status",
+    "is_enabled": false
   },
   {
     "agent_id": "tenant_support_agent",

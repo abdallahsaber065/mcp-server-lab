@@ -56,9 +56,13 @@ def load_json(filename: str):
         return json.load(f)
 
 
-def seed_sync(reset: bool = False):
+def seed_sync(reset: bool = False, verbose: bool = True):
     """Synchronous seeding pipeline using SQLAlchemy ORM Session."""
-    print("Initializing sync database tables...")
+    def log(msg: str):
+        if verbose:
+            print(msg)
+
+    log("Initializing sync database tables...")
     if reset:
         Base.metadata.drop_all(bind=sync_engine)
     init_sync_db()
@@ -74,7 +78,7 @@ def seed_sync(reset: bool = False):
                 for k, v in item.items():
                     setattr(existing, k, v)
         session.commit()
-        print(f"✅ Seeded {len(props_data)} Properties.")
+        log(f"✅ Seeded {len(props_data)} Properties.")
 
         # 2. Units
         units_data = load_json("units.json")
@@ -86,7 +90,7 @@ def seed_sync(reset: bool = False):
                 for k, v in item.items():
                     setattr(existing, k, v)
         session.commit()
-        print(f"✅ Seeded {len(units_data)} Units.")
+        log(f"✅ Seeded {len(units_data)} Units.")
         # 3. Tenants with Hashed Passwords
         tenants_data = load_json("tenants.json")
         for item in tenants_data:
@@ -101,7 +105,7 @@ def seed_sync(reset: bool = False):
                 for k, v in d.items():
                     setattr(existing, k, v)
         session.commit()
-        print(f"✅ Seeded {len(tenants_data)} Tenants with Secure Hashed Passwords.")
+        log(f"✅ Seeded {len(tenants_data)} Tenants with Secure Hashed Passwords.")
 
         # 4. Leases
         leases_data = load_json("leases.json")
@@ -113,7 +117,7 @@ def seed_sync(reset: bool = False):
                 for k, v in item.items():
                     setattr(existing, k, v)
         session.commit()
-        print(f"✅ Seeded {len(leases_data)} Leases.")
+        log(f"✅ Seeded {len(leases_data)} Leases.")
 
         # 5. Maintenance Requests
         maint_data = load_json("maintenance_requests.json")
@@ -125,7 +129,7 @@ def seed_sync(reset: bool = False):
                     d["submitted_at"] = datetime.fromisoformat(d["submitted_at"])
                 session.add(MaintenanceRequest(**d))
         session.commit()
-        print(f"✅ Seeded {len(maint_data)} Maintenance Requests.")
+        log(f"✅ Seeded {len(maint_data)} Maintenance Requests.")
 
         # 6. Agent Tool Bindings
         tool_data = load_json("agent_tool_bindings.json")
@@ -136,7 +140,7 @@ def seed_sync(reset: bool = False):
             else:
                 existing.is_enabled = item["is_enabled"]
         session.commit()
-        print(f"✅ Seeded {len(tool_data)} Agent Tool Bindings.")
+        log(f"✅ Seeded {len(tool_data)} Agent Tool Bindings.")
 
         # 7. RAG Documents
         rag_data = load_json("rag_documents.json")
@@ -148,12 +152,12 @@ def seed_sync(reset: bool = False):
                 for k, v in item.items():
                     setattr(existing, k, v)
         session.commit()
-        print(f"✅ Seeded {len(rag_data)} RAG Documents.")
+        log(f"✅ Seeded {len(rag_data)} RAG Documents.")
 
-        # 8. Memory Subsystem (Episodic & Semantic Stores)
+        # 8. Memory Subsystem (Episodic & Semantic Stores via SQLAlchemy Session)
         try:
-            ep_store = EpisodicStore(db_path="db/episodic_memory.db")
-            sem_store = SemanticMemoryStore(db_path="db/semantic_memory.db")
+            ep_store = EpisodicStore(session=session)
+            sem_store = SemanticMemoryStore(session=session)
             engine = SemanticConsolidationEngine(ep_store, sem_store)
 
             episodes = [
@@ -171,9 +175,9 @@ def seed_sync(reset: bool = False):
                 ep_store.insert_episode(entity_id=entity_id, event_summary=summary, timestamp=ts)
 
             engine.run_periodic_consolidation()
-            print(f"✅ Seeded {len(episodes)} Episodic Records & Consolidated Semantic Facts.")
+            log(f"✅ Seeded {len(episodes)} Episodic Records & Consolidated Semantic Facts.")
         except Exception as mem_err:
-            print(f"⚠️ Memory seeding notice: {mem_err}")
+            log(f"⚠️ Memory seeding notice: {mem_err}")
 
         # 9. PGVector RAG Document Embeddings Seed
         try:
@@ -192,9 +196,9 @@ def seed_sync(reset: bool = False):
                     )
                     session.add(new_emb)
             session.commit()
-            print(f"✅ Seeded {len(rag_data)} PGVector Document Embeddings (Gemini-2 MRL 768-dim).")
+            log(f"✅ Seeded {len(rag_data)} PGVector Document Embeddings (Gemini-2 MRL 768-dim).")
         except Exception as pgv_err:
-            print(f"⚠️ PGVector embedding seeding notice: {pgv_err}")
+            log(f"⚠️ PGVector embedding seeding notice: {pgv_err}")
 
         # Synchronize PostgreSQL auto-increment sequences after explicit PK insertions
         if not IS_SQLITE:
@@ -214,7 +218,7 @@ def seed_sync(reset: bool = False):
                 except Exception as seq_err:
                     session.rollback()
 
-    print("\n🎉 Database sync seeding completed successfully!\n")
+    log("\n🎉 Database sync seeding completed successfully!\n")
 
 
 async def seed_async(reset: bool = False):

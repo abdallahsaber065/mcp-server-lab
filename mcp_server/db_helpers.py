@@ -6,7 +6,6 @@ Unified helper layer delegating to SQLAlchemy 2.0 Repositories for PostgreSQL & 
 import json
 import logging
 import os
-import sqlite3
 import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -14,76 +13,35 @@ from typing import Any, Dict, List, Optional
 # Add root path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from db.models import Lease, MaintenanceRequest, Tenant, Unit
+from db.models import Lease, MaintenanceRequest, Property, Tenant, Unit
 from db.repositories.chat_repo import ChatRepository
 from db.repositories.maintenance_repo import MaintenanceRepository
 from db.repositories.property_repo import PropertyRepository
 from db.repositories.tenant_repo import TenantRepository
 from db.repositories.user_repo import UserRepository
-from db.session import IS_SQLITE, SYNC_DATABASE_URL, get_sync_db, init_sync_db
+from db.session import IS_SQLITE, SYNC_DATABASE_URL, SyncSessionLocal, get_sync_db, init_sync_db
 from scripts.seed_db import seed_sync
 
 logger = logging.getLogger("mcp.db_helpers")
-
-
-def get_db_file_path() -> str:
-    return os.getenv("MCP_DB_FILE", os.path.join(os.path.dirname(__file__), "..", "db", "realty_mcp.db"))
-
-
-def get_db_connection() -> sqlite3.Connection:
-    """Legacy SQLite connection provider (with auto-table creation)."""
-    db_file = get_db_file_path()
-    os.makedirs(os.path.dirname(db_file), exist_ok=True)
-    conn = sqlite3.connect(db_file)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-
-    # Auto-ensure chat tables exist with role column
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS chat_sessions (
-            session_id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            user_role TEXT DEFAULT 'property_manager',
-            role TEXT DEFAULT 'property_manager',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            message_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            sender TEXT DEFAULT 'assistant',
-            msg_type TEXT DEFAULT 'assistant',
-            message_text TEXT,
-            content TEXT,
-            tool_name TEXT,
-            tool_args TEXT,
-            tool_result TEXT,
-            elicitation_payload TEXT,
-            sse_payload TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
-        );
-    """)
-    conn.commit()
-    return conn
 
 
 _DB_INITIALIZED = False
 
 
 def init_db(reset: bool = False):
-    """Initialize active database tables via SQLAlchemy metadata and ensure seed data."""
+    """Initialize active database tables via SQLAlchemy metadata and seed only if empty."""
     global _DB_INITIALIZED
     if _DB_INITIALIZED and not reset:
         return
     try:
         init_sync_db()
-        seed_sync(reset=reset)
+        with SyncSessionLocal() as session:
+            has_data = session.query(Property).first() is not None
+        if reset or not has_data:
+            seed_sync(reset=reset, verbose=False)
         _DB_INITIALIZED = True
     except Exception as e:
-        logger.warning("init_db seeding warning: %s", e)
+        logger.warning("init_db notice: %s", e)
 
 
 # --- CHAT PERSISTENCE HELPERS ---
