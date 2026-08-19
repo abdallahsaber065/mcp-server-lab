@@ -1,6 +1,7 @@
 """
 Durable State Graph Checkpointer (state_graph/checkpoint.py)
 Built on SQLAlchemy 2.0 ORM CheckpointRepository for PostgreSQL & SQLite persistence.
+Supports time-travel inspection, state diffing, and historical snapshot recovery.
 """
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select
