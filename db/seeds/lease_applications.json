@@ -1,0 +1,47 @@
+[
+  {
+    "application_id": 1,
+    "unit_id": 102,
+    "applicant_id": 10,
+    "applicant_name": "Farida Shaker",
+    "applicant_email": "farida.shaker@gmail.com",
+    "applicant_phone": "+20 101 222 9911",
+    "proposed_monthly_rent": 19500.0,
+    "lease_duration_months": 12,
+    "move_in_date": "2026-09-15",
+    "status": "submitted",
+    "employment_details": "Senior UX Architect at Vodafone Intelligent Solutions (Monthly Income: 65,000 EGP).",
+    "review_notes": "Pending manager income verification & ID copy.",
+    "reviewed_by": null
+  },
+  {
+    "application_id": 2,
+    "unit_id": 202,
+    "applicant_id": 11,
+    "applicant_name": "Youssef Aly",
+    "applicant_email": "youssef.aly@gmail.com",
+    "applicant_phone": "+20 120 777 4433",
+    "proposed_monthly_rent": 26000.0,
+    "lease_duration_months": 24,
+    "move_in_date": "2026-10-01",
+    "status": "under_review",
+    "employment_details": "Managing Director at Aly Import & Export LLC.",
+    "review_notes": "Credit check passed. Background check in progress.",
+    "reviewed_by": "Abdallah Saber"
+  },
+  {
+    "application_id": 3,
+    "unit_id": 502,
+    "applicant_id": 6,
+    "applicant_name": "Eng. Karim Mostafa",
+    "applicant_email": "karim.mostafa@techstart.io",
+    "applicant_phone": "+20 109 444 5566",
+    "proposed_monthly_rent": 46000.0,
+    "lease_duration_months": 12,
+    "move_in_date": "2026-11-01",
+    "status": "approved",
+    "employment_details": "Co-founder & CTO at TechStart IO.",
+    "review_notes": "Approved by Executive Board under preferential renewal terms.",
+    "reviewed_by": "Cornerstone Executive Board"
+  }
+]

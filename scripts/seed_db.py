@@ -24,11 +24,14 @@ from db.models import (
     AgentToolBinding,
     Base,
     Lease,
+    LeaseApplication,
     MaintenanceRequest,
+    Payment,
     Property,
     RAGDocument,
     RagDocumentEmbedding,
     Tenant,
+    TourBooking,
     Unit,
 )
 from db.session import (
@@ -64,7 +67,12 @@ def seed_sync(reset: bool = False, verbose: bool = True):
 
     log("Initializing sync database tables...")
     if reset:
-        Base.metadata.drop_all(bind=sync_engine)
+        if not IS_SQLITE:
+            with sync_engine.connect() as conn:
+                conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+                conn.commit()
+        else:
+            Base.metadata.drop_all(bind=sync_engine)
     init_sync_db()
 
     with SyncSessionLocal() as session:
@@ -118,6 +126,59 @@ def seed_sync(reset: bool = False, verbose: bool = True):
                     setattr(existing, k, v)
         session.commit()
         log(f"✅ Seeded {len(leases_data)} Leases.")
+
+        # 4.5. Payments Ledger
+        try:
+            payments_data = load_json("payments.json")
+            for item in payments_data:
+                existing = session.get(Payment, item["payment_id"])
+                if not existing:
+                    d = dict(item)
+                    if "payment_date" in d and isinstance(d["payment_date"], str):
+                        d["payment_date"] = datetime.fromisoformat(d["payment_date"])
+                    session.add(Payment(**d))
+                else:
+                    for k, v in item.items():
+                        if k == "payment_date" and isinstance(v, str):
+                            v = datetime.fromisoformat(v)
+                        setattr(existing, k, v)
+            session.commit()
+            log(f"✅ Seeded {len(payments_data)} Payment Ledger Records.")
+        except Exception as p_err:
+            session.rollback()
+            log(f"⚠️ Payments seed notice: {p_err}")
+
+        # 4.6. Lease Applications
+        try:
+            apps_data = load_json("lease_applications.json")
+            for item in apps_data:
+                existing = session.get(LeaseApplication, item["application_id"])
+                if not existing:
+                    session.add(LeaseApplication(**item))
+                else:
+                    for k, v in item.items():
+                        setattr(existing, k, v)
+            session.commit()
+            log(f"✅ Seeded {len(apps_data)} Lease Applications.")
+        except Exception as a_err:
+            session.rollback()
+            log(f"⚠️ Lease applications seed notice: {a_err}")
+
+        # 4.7. Tour Bookings
+        try:
+            tours_data = load_json("tour_bookings.json")
+            for item in tours_data:
+                existing = session.get(TourBooking, item["booking_id"])
+                if not existing:
+                    session.add(TourBooking(**item))
+                else:
+                    for k, v in item.items():
+                        setattr(existing, k, v)
+            session.commit()
+            log(f"✅ Seeded {len(tours_data)} Tour Bookings.")
+        except Exception as t_err:
+            session.rollback()
+            log(f"⚠️ Tour bookings seed notice: {t_err}")
 
         # 5. Maintenance Requests
         maint_data = load_json("maintenance_requests.json")
@@ -225,8 +286,12 @@ async def seed_async(reset: bool = False):
     """Asynchronous seeding pipeline using SQLAlchemy AsyncSession."""
     print("Initializing async database tables...")
     if reset:
-        async with async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+        if not IS_SQLITE:
+            async with async_engine.begin() as conn:
+                await conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
+        else:
+            async with async_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
     await init_async_db()
 
     async with AsyncSessionLocal() as session:
@@ -281,6 +346,56 @@ async def seed_async(reset: bool = False):
                     setattr(existing, k, v)
         await session.commit()
         print(f"✅ [Async] Seeded {len(leases_data)} Leases.")
+
+        # Payments Ledger
+        try:
+            payments_data = load_json("payments.json")
+            for item in payments_data:
+                existing = await session.get(Payment, item["payment_id"])
+                if not existing:
+                    d = dict(item)
+                    if "payment_date" in d and isinstance(d["payment_date"], str):
+                        d["payment_date"] = datetime.fromisoformat(d["payment_date"])
+                    session.add(Payment(**d))
+                else:
+                    for k, v in item.items():
+                        if k == "payment_date" and isinstance(v, str):
+                            v = datetime.fromisoformat(v)
+                        setattr(existing, k, v)
+            await session.commit()
+            print(f"✅ [Async] Seeded {len(payments_data)} Payment Ledger Records.")
+        except Exception as p_err:
+            print(f"⚠️ [Async] Payments seed notice: {p_err}")
+
+        # Lease Applications
+        try:
+            apps_data = load_json("lease_applications.json")
+            for item in apps_data:
+                existing = await session.get(LeaseApplication, item["application_id"])
+                if not existing:
+                    session.add(LeaseApplication(**item))
+                else:
+                    for k, v in item.items():
+                        setattr(existing, k, v)
+            await session.commit()
+            print(f"✅ [Async] Seeded {len(apps_data)} Lease Applications.")
+        except Exception as a_err:
+            print(f"⚠️ [Async] Lease applications seed notice: {a_err}")
+
+        # Tour Bookings
+        try:
+            tours_data = load_json("tour_bookings.json")
+            for item in tours_data:
+                existing = await session.get(TourBooking, item["booking_id"])
+                if not existing:
+                    session.add(TourBooking(**item))
+                else:
+                    for k, v in item.items():
+                        setattr(existing, k, v)
+            await session.commit()
+            print(f"✅ [Async] Seeded {len(tours_data)} Tour Bookings.")
+        except Exception as t_err:
+            print(f"⚠️ [Async] Tour bookings seed notice: {t_err}")
 
         # Maintenance Requests
         maint_data = load_json("maintenance_requests.json")

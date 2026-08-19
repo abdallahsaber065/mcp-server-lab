@@ -14,7 +14,8 @@
     "is_featured": true,
     "virtual_tour_url": "https://my.matterport.com/show/?m=2vyX8P3NZK8",
     "total_units": 45,
-    "occupancy_rate": 0.93
+    "occupancy_rate": 0.93,
+    "owner_id": 12
   },
   {
     "property_id": 2,
@@ -31,7 +32,8 @@
     "is_featured": true,
     "virtual_tour_url": "https://my.matterport.com/show/?m=GmrLYzFCBG8",
     "total_units": 24,
-    "occupancy_rate": 0.88
+    "occupancy_rate": 0.88,
+    "owner_id": 12
   },
   {
     "property_id": 3,
@@ -48,7 +50,8 @@
     "is_featured": false,
     "virtual_tour_url": "https://my.matterport.com/show/?m=xFCkwb48ZnZ",
     "total_units": 60,
-    "occupancy_rate": 0.95
+    "occupancy_rate": 0.95,
+    "owner_id": 9
   },
   {
     "property_id": 4,
@@ -65,7 +68,8 @@
     "is_featured": true,
     "virtual_tour_url": "https://my.matterport.com/show/?m=bD5PtbhxXmV",
     "total_units": 36,
-    "occupancy_rate": 0.91
+    "occupancy_rate": 0.91,
+    "owner_id": 12
   },
   {
     "property_id": 5,
@@ -82,7 +86,8 @@
     "is_featured": true,
     "virtual_tour_url": "https://my.matterport.com/show/?m=PkugSohfGeH",
     "total_units": 18,
-    "occupancy_rate": 0.85
+    "occupancy_rate": 0.85,
+    "owner_id": 12
   },
   {
     "property_id": 6,
@@ -99,6 +104,7 @@
     "is_featured": true,
     "virtual_tour_url": "https://my.matterport.com/show/?m=E3sXUgQazs7",
     "total_units": 12,
-    "occupancy_rate": 0.96
+    "occupancy_rate": 0.96,
+    "owner_id": 9
   }
 ]

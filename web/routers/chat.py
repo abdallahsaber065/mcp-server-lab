@@ -31,6 +31,7 @@ from rag.pipeline import build_and_seed_vector_store
 from rag.self_rag import SelfRAGVerifier
 from web.deps import get_optional_user
 from web.llm_engine import MCPLLMEngine, create_langchain_llm
+from web.services.chat import build_memory_payload, build_rag_payload, dispatch_confirmed_action
 from web.services.prompt_builder import build_system_prompt
 
 logger = logging.getLogger("mcp_chat_router")
@@ -175,68 +176,26 @@ async def chat_stream_endpoint(req: StreamChatRequest, request: Request, db: Asy
     )
 
     # 1. Extract memory context payload
-    memory_payload = None
-    if effective_tenant_id:
-        try:
-            active_facts = semantic_store.get_active_facts(subject=f"tenant_{effective_tenant_id}")
-            episodes = episodic_store.query_episodes(entity_id=f"tenant_{effective_tenant_id}", limit=4)
-            if active_facts or episodes:
-                memory_payload = {
-                    "type": "memory_context",
-                    "persona_name": effective_email or f"Tenant #{effective_tenant_id}",
-                    "active_facts": active_facts or [],
-                    "recent_episodes": episodes or []
-                }
-        except Exception:
-            pass
+    memory_payload = build_memory_payload(
+        tenant_id=effective_tenant_id,
+        user_email=effective_email,
+        semantic_store=semantic_store,
+        episodic_store=episodic_store,
+    )
 
     # 2. Inject RAG context based on selected strategy
-    rag_knowledge_items = []
-    citations_list = []
-    if req.rag_strategy == "hybrid":
-        search_results = hybrid_engine.search(msg_text, top_k=3)
-        for r in search_results:
-            rag_knowledge_items.append(f"• {r['payload']}")
-            citations_list.append(r.get("title") or r.get("payload", "")[:80])
-    elif req.rag_strategy == "agentic":
-        agentic_result = agentic_router.reason_and_retrieve(msg_text)
-        for e in agentic_result["evidence"]:
-            rag_knowledge_items.append(f"• {e}")
-        citations_list = agentic_result.get("sub_queries", [])
-    elif req.rag_strategy == "graph":
-        graph_result = graph_rag.query_graph(msg_text)
-        for p in graph_result["paths"]:
-            rag_knowledge_items.append(f"• {p['source']} {p['relation']} {p['target']}")
-        citations_list = graph_result.get("matched_entities", [])
-    elif req.rag_strategy == "pgvector":
-        search_results = pgvector_rag_store.search(
-            query=msg_text,
-            role=req.role,
-            user_tenant_id=req.tenant_id,
-            top_k=3
-        )
-        for r in search_results:
-            rag_knowledge_items.append(f"• [{r['title']}]: {r['payload']}")
-            citations_list.append(f"{r['title']} ({r['similarity']:.2f})")
-    elif req.rag_strategy == "naive":
-        search_results = naive_rag_search(query=msg_text, vector_store=rag_store, top_k=3)
-        for r in search_results:
-            rag_knowledge_items.append(f"• {r['payload']}")
-            citations_list.append(r.get("title") or r.get("payload", "")[:80])
-
-    self_rag_payload = None
-    if rag_knowledge_items:
-        rag_body = "\n".join(rag_knowledge_items)
-        system_prompt += f"\n\n[RELEVANT RESIDENCE & POLICY KNOWLEDGE BASE]:\n{rag_body}\n"
-        self_rag_payload = {
-            "type": "self_rag",
-            "strategy": req.rag_strategy,
-            "is_relevant": True,
-            "is_supported": True,
-            "score": 0.96,
-            "citations": citations_list or ["Cornerstone Master Policy"],
-            "preview": rag_body[:250]
-        }
+    rag_snippet, self_rag_payload = build_rag_payload(
+        msg_text=msg_text,
+        rag_strategy=req.rag_strategy,
+        rag_store=rag_store,
+        hybrid_engine=hybrid_engine,
+        agentic_router=agentic_router,
+        graph_rag=graph_rag,
+        pgvector_rag_store=pgvector_rag_store,
+        role=effective_role,
+        tenant_id=effective_tenant_id,
+    )
+    system_prompt += rag_snippet
 
     stream_gen = llm_engine.execute_agent_loop_stream(
         mcp_server_instance=mcp_server,
@@ -390,10 +349,6 @@ class ActionConfirmRequest(BaseModel):
 @router.post("/chat/action/confirm")
 async def confirm_chat_action(req: ActionConfirmRequest, db: AsyncSession = Depends(get_async_db)):
     """Handles human confirmation/modification for high-consequence real estate actions."""
-    from db.repositories.tour_repo import TourRepository
-    from db.session import get_sync_db
-    from mcp_server.db_helpers import create_maintenance_record, update_lease_terms
-
     repo = AsyncChatRepository(db)
 
     if not req.approved:
@@ -401,103 +356,7 @@ async def confirm_chat_action(req: ActionConfirmRequest, db: AsyncSession = Depe
         await repo.save_chat_message(session_id=req.session_id, msg_type="assistant", content=final_answer)
         return {"status": "cancelled", "final_answer": final_answer}
 
-    data = req.payload
-    final_answer = ""
-
-    try:
-        if req.action_type == "schedule_tour":
-            prop_id = int(data.get("property_id") or 1)
-            unit_id = int(data["unit_id"]) if data.get("unit_id") else None
-            contact_name = data.get("contact_name") or "Guest Prospect"
-            contact_email = data.get("contact_email") or "guest@cornerstonerealty.eg"
-            contact_phone = data.get("contact_phone") or "+20 100 000 0000"
-            tour_type = data.get("tour_type") or "in_person"
-            requested_date = data.get("requested_date") or "2026-08-28"
-            time_slot = data.get("time_slot") or "14:00"
-
-            with next(get_sync_db()) as sync_session:
-                tour_repo = TourRepository(sync_session)
-                booking = tour_repo.create_booking(
-                    property_id=prop_id,
-                    unit_id=unit_id,
-                    contact_name=contact_name,
-                    contact_email=contact_email,
-                    contact_phone=contact_phone,
-                    tour_type=tour_type,
-                    requested_date=requested_date,
-                    time_slot=time_slot,
-                    notes=data.get("notes")
-                )
-            final_answer = (
-                f"✅ **Viewing Tour Confirmed & Scheduled!**\n\n"
-                f"Booking **#{booking['booking_id']}** registered for **{contact_name}** at "
-                f"**{booking['property_name']}** (Suite {booking.get('unit_number', 'General')}).\n\n"
-                f"• **Date:** {requested_date}\n"
-                f"• **Time Slot:** {time_slot}\n"
-                f"• **Tour Format:** {tour_type.replace('_', ' ').title()}\n"
-                f"• **Email Confirmation Sent:** {contact_email}"
-            )
-
-        elif req.action_type == "apply_lease":
-            applicant_name = data.get("applicant_name") or "Applicant"
-            unit_id = int(data.get("unit_id") or 101)
-            monthly_rent = float(data.get("monthly_rent") or 45000)
-            deposit = float(data.get("security_deposit") or (monthly_rent * 2))
-            term = int(data.get("duration_months") or 12)
-            move_in = data.get("move_in_date") or "2026-09-01"
-
-            final_answer = (
-                f"✅ **Digital Lease Application Submitted!**\n\n"
-                f"Application registered for **{applicant_name}** for **Unit #{unit_id}**.\n\n"
-                f"• **Proposed Monthly Rent:** {monthly_rent:,.0f} EGP\n"
-                f"• **Security Deposit (2 Months):** {deposit:,.0f} EGP\n"
-                f"• **Lease Term:** {term} Months\n"
-                f"• **Target Move-in Date:** {move_in}\n\n"
-                f"The property management operations desk will review your submission and contact you within 24 hours."
-            )
-
-        elif req.action_type == "submit_maintenance":
-            unit_id = int(data.get("unit_id") or 101)
-            category = data.get("category") or "plumbing"
-            priority = data.get("priority") or "normal"
-            desc = data.get("description") or "Maintenance request submitted."
-
-            res = create_maintenance_record(
-                tenant_id=int(data.get("tenant_id") or 1),
-                unit_id=unit_id,
-                issue_description=desc,
-                priority=priority
-            )
-            final_answer = (
-                f"✅ **Maintenance Ticket Dispatched!**\n\n"
-                f"Work order **#{res.get('request_id', 'TKT-1')}** registered for Unit #{unit_id}.\n\n"
-                f"• **Category:** {category.title()}\n"
-                f"• **Priority:** {priority.upper()}\n"
-                f"• **Issue Summary:** {desc}\n"
-                f"• **SLA Policy:** Under our 48-hour resolution SLA, an accredited maintenance technician has been notified."
-            )
-
-        elif req.action_type == "modify_lease":
-            lease_id = int(data.get("lease_id") or 1)
-            proposed_rent = float(data.get("proposed_rent") or 42000)
-            duration = int(data.get("duration_months") or 12)
-
-            res = update_lease_terms(
-                lease_id=lease_id,
-                new_rent=proposed_rent,
-                duration_months=duration,
-                signed_off_by_executive=True
-            )
-            final_answer = (
-                f"✅ **Lease Terms Modified & Executed!**\n\n"
-                f"Lease **#{lease_id}** updated to monthly rent **{proposed_rent:,.2f} EGP** for **{duration} months**."
-            )
-        else:
-            final_answer = f"Action {req.action_type} executed successfully."
-
-    except Exception as e:
-        final_answer = f"⚠️ Action failed during execution: {str(e)}"
-
+    final_answer = dispatch_confirmed_action(req.action_type, req.payload)
     await repo.save_chat_message(session_id=req.session_id, msg_type="assistant", content=final_answer)
     return {"status": "success", "final_answer": final_answer}
 

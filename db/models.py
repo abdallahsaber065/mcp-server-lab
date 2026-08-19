@@ -65,6 +65,7 @@ class Property(Base):
     virtual_tour_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     total_units: Mapped[int] = mapped_column(Integer, default=1)
     occupancy_rate: Mapped[float] = mapped_column(Float, default=1.0)
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     units: Mapped[List["Unit"]] = relationship("Unit", back_populates="property", cascade="all, delete-orphan")
@@ -95,6 +96,7 @@ class Unit(Base):
     property: Mapped["Property"] = relationship("Property", back_populates="units")
     leases: Mapped[List["Lease"]] = relationship("Lease", back_populates="unit")
     maintenance_requests: Mapped[List["MaintenanceRequest"]] = relationship("MaintenanceRequest", back_populates="unit")
+    applications: Mapped[List["LeaseApplication"]] = relationship("LeaseApplication", back_populates="unit")
 
 
 class Tenant(Base):
@@ -104,8 +106,8 @@ class Tenant(Base):
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    role: Mapped[str] = mapped_column(String(30), default="tenant")  # tenant, property_manager, executive_admin
-    assigned_unit_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("units.unit_id"), nullable=True)
+    role: Mapped[str] = mapped_column(String(30), default="tenant")  # tenant, prospect, landlord, property_manager, executive_admin
+    assigned_unit_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     emergency_contact: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     hashed_password: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -114,6 +116,8 @@ class Tenant(Base):
 
     leases: Mapped[List["Lease"]] = relationship("Lease", back_populates="tenant")
     maintenance_requests: Mapped[List["MaintenanceRequest"]] = relationship("MaintenanceRequest", back_populates="tenant")
+    payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="tenant")
+    applications: Mapped[List["LeaseApplication"]] = relationship("LeaseApplication", back_populates="applicant")
 
 
 class Lease(Base):
@@ -126,14 +130,61 @@ class Lease(Base):
     end_date: Mapped[str] = mapped_column(String(20), nullable=False)
     monthly_rent: Mapped[float] = mapped_column(Float, nullable=False)
     deposit_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    lease_type: Mapped[str] = mapped_column(String(30), default="residential")  # residential, commercial, mixed
+    status: Mapped[str] = mapped_column(String(30), default="active")  # active, pending_approval, renewed, expired, terminated
+    payment_status: Mapped[str] = mapped_column(String(20), default="current")  # current, pending, arrears, disputed
+    renewal_status: Mapped[str] = mapped_column(String(30), default="none")  # none, requested, approved, declined
+    renewal_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     requires_executive_signoff: Mapped[bool] = mapped_column(Boolean, default=False)
-    payment_status: Mapped[str] = mapped_column(String(20), default="current")  # current, pending, arrears, disputed
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     unit: Mapped["Unit"] = relationship("Unit", back_populates="leases")
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="leases")
+    payments: Mapped[List["Payment"]] = relationship("Payment", back_populates="lease", cascade="all, delete-orphan")
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    payment_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lease_id: Mapped[int] = mapped_column(Integer, ForeignKey("leases.lease_id"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.tenant_id"), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    due_date: Mapped[str] = mapped_column(String(20), nullable=False)
+    payment_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    payment_method: Mapped[str] = mapped_column(String(30), default="fawry")  # fawry, credit_card, bank_transfer, cash
+    transaction_reference: Mapped[str] = mapped_column(String(60), unique=True, index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # paid, pending, overdue, failed, refunded
+    receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    lease: Mapped["Lease"] = relationship("Lease", back_populates="payments")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="payments")
+
+
+class LeaseApplication(Base):
+    __tablename__ = "lease_applications"
+
+    application_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    unit_id: Mapped[int] = mapped_column(Integer, ForeignKey("units.unit_id"), nullable=False)
+    applicant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.tenant_id"), nullable=True)
+    applicant_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    applicant_email: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    applicant_phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    proposed_monthly_rent: Mapped[float] = mapped_column(Float, nullable=False)
+    lease_duration_months: Mapped[int] = mapped_column(Integer, default=12)
+    move_in_date: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="submitted")  # submitted, under_review, approved, rejected, withdrawn
+    employment_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    unit: Mapped["Unit"] = relationship("Unit", back_populates="applications")
+    applicant: Mapped[Optional["Tenant"]] = relationship("Tenant", back_populates="applications")
 
 
 class MaintenanceRequest(Base):
@@ -146,8 +197,13 @@ class MaintenanceRequest(Base):
     priority: Mapped[str] = mapped_column(String(20), default="medium")   # emergency, high, medium, low
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="open")       # open, dispatched, in_progress, resolved, cancelled
+    preferred_time_slot: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     estimated_cost: Mapped[float] = mapped_column(Float, default=0.0)
     contractor_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    contractor_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tenant_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 1 to 5
+    tenant_feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    images: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -313,6 +369,8 @@ class TourBooking(Base):
     requested_date: Mapped[str] = mapped_column(String(50), nullable=False)
     time_slot: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pending")  # pending, confirmed, rescheduled, completed, cancelled
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rescheduled_from_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     manager_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

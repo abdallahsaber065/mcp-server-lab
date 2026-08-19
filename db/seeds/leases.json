@@ -7,10 +7,13 @@
     "end_date": "2026-08-31",
     "monthly_rent": 28000.0,
     "deposit_amount": 56000.0,
+    "lease_type": "residential",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "requested",
     "is_active": true,
     "requires_executive_signoff": false,
-    "payment_status": "current",
-    "notes": "Annual residential lease with standard 2-month security deposit."
+    "notes": "Annual residential lease with standard 2-month security deposit. Tenant requested 1-year renewal."
   },
   {
     "lease_id": 2,
@@ -20,9 +23,12 @@
     "end_date": "2026-12-31",
     "monthly_rent": 75000.0,
     "deposit_amount": 225000.0,
+    "lease_type": "residential",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "none",
     "is_active": true,
     "requires_executive_signoff": true,
-    "payment_status": "current",
     "notes": "Diplomatic high-value lease. Full security clearance approved by Board."
   },
   {
@@ -33,9 +39,12 @@
     "end_date": "2026-05-31",
     "monthly_rent": 24000.0,
     "deposit_amount": 48000.0,
+    "lease_type": "residential",
+    "status": "active",
+    "payment_status": "arrears",
+    "renewal_status": "none",
     "is_active": true,
     "requires_executive_signoff": false,
-    "payment_status": "arrears",
     "notes": "Notice sent: 2 months rent pending (48,000 EGP). Eligible for Dispute Mediation Flow."
   },
   {
@@ -46,9 +55,12 @@
     "end_date": "2028-02-28",
     "monthly_rent": 120000.0,
     "deposit_amount": 360000.0,
+    "lease_type": "commercial",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "none",
     "is_active": true,
     "requires_executive_signoff": true,
-    "payment_status": "current",
     "notes": "3-Year Corporate Headquarters Lease with Banque Misr Bank Guarantee Escrow."
   },
   {
@@ -59,9 +71,12 @@
     "end_date": "2027-04-30",
     "monthly_rent": 48000.0,
     "deposit_amount": 144000.0,
+    "lease_type": "commercial",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "none",
     "is_active": true,
     "requires_executive_signoff": true,
-    "payment_status": "current",
     "notes": "Commercial retail franchise with grease-trap maintenance clause."
   },
   {
@@ -72,9 +87,12 @@
     "end_date": "2026-09-30",
     "monthly_rent": 52000.0,
     "deposit_amount": 104000.0,
+    "lease_type": "residential",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "none",
     "is_active": true,
     "requires_executive_signoff": true,
-    "payment_status": "current",
     "notes": "Compound Villa with private garden and pool service."
   },
   {
@@ -85,9 +103,44 @@
     "end_date": "2026-06-30",
     "monthly_rent": 22000.0,
     "deposit_amount": 44000.0,
+    "lease_type": "residential",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "none",
     "is_active": true,
     "requires_executive_signoff": false,
-    "payment_status": "current",
     "notes": "Seasonal seaside residential unit in Alexandria."
+  },
+  {
+    "lease_id": 8,
+    "unit_id": 301,
+    "tenant_id": 1,
+    "start_date": "2025-11-01",
+    "end_date": "2027-10-31",
+    "monthly_rent": 38000.0,
+    "deposit_amount": 76000.0,
+    "lease_type": "commercial",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "none",
+    "is_active": true,
+    "requires_executive_signoff": false,
+    "notes": "Medical consulting clinic suite leased by Dr. Tarek El-Mahdy (Second active lease)."
+  },
+  {
+    "lease_id": 9,
+    "unit_id": 102,
+    "tenant_id": 6,
+    "start_date": "2026-01-01",
+    "end_date": "2026-12-31",
+    "monthly_rent": 19500.0,
+    "deposit_amount": 39000.0,
+    "lease_type": "commercial",
+    "status": "active",
+    "payment_status": "current",
+    "renewal_status": "none",
+    "is_active": true,
+    "requires_executive_signoff": false,
+    "notes": "Satellite tech accelerator workshop space for TechStart IO (Karim Mostafa Second Lease)."
   }
 ]

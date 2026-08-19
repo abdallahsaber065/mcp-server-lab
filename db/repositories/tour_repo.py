@@ -1,11 +1,11 @@
 """
 Tour Booking Repository (db/repositories/tour_repo.py)
-Manages property viewing schedules, in-person tours, and 3D guided walkthrough requests.
+Manages property viewing schedules, in-person tours, 3D guided walkthroughs, cancellations, and rescheduling.
 """
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from db.models import Property, Tenant, TourBooking, Unit
@@ -61,6 +61,7 @@ class TourRepository:
         user_id: Optional[int] = None,
         property_id: Optional[int] = None,
         status: Optional[str] = None,
+        email: Optional[str] = None,
         limit: int = 50
     ) -> List[Dict[str, Any]]:
         stmt = (
@@ -73,10 +74,41 @@ class TourRepository:
             stmt = stmt.where(TourBooking.property_id == property_id)
         if status:
             stmt = stmt.where(TourBooking.status == status)
+        if email:
+            stmt = stmt.where(TourBooking.contact_email == email)
 
         stmt = stmt.order_by(TourBooking.created_at.desc()).limit(limit)
         bookings = self.session.scalars(stmt).all()
         return [self._to_dict(b) for b in bookings]
+
+    def cancel_booking(self, booking_id: int, cancellation_reason: str = "Cancelled by user") -> Optional[Dict[str, Any]]:
+        booking = self.session.get(TourBooking, booking_id)
+        if not booking:
+            return None
+        booking.status = "cancelled"
+        booking.cancellation_reason = cancellation_reason
+        self.session.commit()
+        self.session.refresh(booking)
+        return self._to_dict(booking)
+
+    def reschedule_booking(
+        self,
+        booking_id: int,
+        new_date: str,
+        new_slot: str,
+        notes: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        booking = self.session.get(TourBooking, booking_id)
+        if not booking:
+            return None
+        booking.status = "rescheduled"
+        booking.requested_date = new_date
+        booking.time_slot = new_slot
+        if notes:
+            booking.notes = f"{booking.notes or ''} | Rescheduled: {notes}".strip()
+        self.session.commit()
+        self.session.refresh(booking)
+        return self._to_dict(booking)
 
     def update_status(
         self,
@@ -114,6 +146,8 @@ class TourRepository:
             "requested_date": b.requested_date,
             "time_slot": b.time_slot,
             "status": b.status,
+            "cancellation_reason": getattr(b, "cancellation_reason", None),
+            "rescheduled_from_id": getattr(b, "rescheduled_from_id", None),
             "notes": b.notes,
             "manager_notes": b.manager_notes,
             "created_at": b.created_at.isoformat() if b.created_at else None,

@@ -79,5 +79,32 @@
     "role": "executive_admin",
     "assigned_unit_id": null,
     "emergency_contact": "Executive Secretariat (+20 2 2888 9990)"
+  },
+  {
+    "tenant_id": 10,
+    "full_name": "Farida Shaker",
+    "email": "farida.shaker@gmail.com",
+    "phone": "+20 101 222 9911",
+    "role": "prospect",
+    "assigned_unit_id": null,
+    "emergency_contact": "Sameh Shaker (+20 101 555 8822)"
+  },
+  {
+    "tenant_id": 11,
+    "full_name": "Youssef Aly",
+    "email": "youssef.aly@gmail.com",
+    "phone": "+20 120 777 4433",
+    "role": "prospect",
+    "assigned_unit_id": null,
+    "emergency_contact": "Mariam Aly (+20 120 333 1122)"
+  },
+  {
+    "tenant_id": 12,
+    "full_name": "Hassan El-Wakeel (Portfolio Landlord)",
+    "email": "hassan.elwakeel@realtyinvest.eg",
+    "phone": "+20 100 555 1100",
+    "role": "landlord",
+    "assigned_unit_id": null,
+    "emergency_contact": "Wealth Management Office (+20 2 2450 7700)"
   }
 ]
