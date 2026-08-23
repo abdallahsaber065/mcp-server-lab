@@ -2,14 +2,38 @@
 Durable State Graph Checkpointer (state_graph/checkpoint.py)
 Built on SQLAlchemy 2.0 ORM CheckpointRepository for PostgreSQL & SQLite persistence.
 Supports time-travel inspection, state diffing, and historical snapshot recovery.
+Native LangGraph BaseCheckpointSaver adapter for official StateGraph persistence (v1.x).
 """
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Iterator, Sequence, Tuple
+import json
+import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from db.session import SessionLocal, init_sync_db
 from db.models import GraphCheckpoint
 from db.repositories.checkpoint_repo import CheckpointRepository
 from state_graph.models import GraphState
+import logging
+logger = logging.getLogger("state_graph.checkpoint")
+
+try:
+    from langgraph.checkpoint.base import (
+        BaseCheckpointSaver,
+        Checkpoint,
+        CheckpointMetadata,
+        CheckpointTuple,
+        ChannelVersions,
+    )
+    from langchain_core.runnables import RunnableConfig
+    _HAS_LANGGRAPH = True
+except Exception:
+    _HAS_LANGGRAPH = False
+    BaseCheckpointSaver = object  # type: ignore
+    Checkpoint = dict  # type: ignore
+    CheckpointMetadata = dict  # type: ignore
+    CheckpointTuple = Any  # type: ignore
+    ChannelVersions = dict  # type: ignore
+    RunnableConfig = dict  # type: ignore
 
 class DurableCheckpointer:
     """Persists immutable state snapshots to the database for crash-and-resume recovery."""
@@ -109,4 +133,82 @@ class DurableCheckpointer:
     def close(self):
         if not self._session_provided:
             self.session.close()
+
+
+try:
+    from langgraph.checkpoint.memory import MemorySaver
+except Exception:
+    MemorySaver = BaseCheckpointSaver  # type: ignore
+
+
+class SQLAlchemyLangGraphCheckpointer(MemorySaver):
+    """
+    Durable LangGraph checkpointer backed by in-memory channel storage + DB synchronization.
+    Supports native LangGraph 1.x StateSnapshot, tasks, interrupts, and time-travel rollback.
+    """
+
+    def __init__(self, session: Optional[Session] = None):
+        super().__init__(serde=None)
+        self._session_provided = session is not None
+        if not self._session_provided:
+            init_sync_db()
+        self.session = session or SessionLocal()
+
+    def get_tuple(self, config):  # type: ignore[override]
+        # Try in-memory first
+        tup = super().get_tuple(config)
+        if tup is not None:
+            return tup
+        # Fallback to database for process crash recovery
+        thread_id = config.get("configurable", {}).get("thread_id", "")
+        if not thread_id:
+            return None
+        cid = config.get("configurable", {}).get("checkpoint_id")
+        try:
+            with SessionLocal() as s:
+                q = s.query(GraphCheckpoint).filter(GraphCheckpoint.run_id == thread_id)
+                if cid:
+                    q = q.filter(GraphCheckpoint.checkpoint_id == cid)
+                row = q.order_by(GraphCheckpoint.step_number.desc()).first()
+                if row and row.state_json:
+                    data = json.loads(row.state_json)
+                    checkpoint = data.get("checkpoint") or {}
+                    metadata = data.get("metadata") or {}
+                    parent_config = data.get("parent_config")
+                    from langgraph.checkpoint.base import CheckpointTuple
+                    return CheckpointTuple(
+                        config={"configurable": {"thread_id": thread_id, "checkpoint_ns": config.get("configurable", {}).get("checkpoint_ns", ""), "checkpoint_id": row.checkpoint_id}},
+                        checkpoint=checkpoint,  # type: ignore
+                        metadata=metadata,  # type: ignore
+                        parent_config=parent_config,
+                        pending_writes=[],
+                    )
+        except Exception as e:
+            logger.warning("SQL get_tuple recovery fallback: %s", e)
+        return None
+
+    def put(self, config, checkpoint, metadata, new_versions):  # type: ignore[override]
+        res = super().put(config, checkpoint, metadata, new_versions)
+        thread_id = config.get("configurable", {}).get("thread_id", "")
+        checkpoint_id = checkpoint.get("id") or str(uuid.uuid4())
+        step = int(metadata.get("step", 0)) if isinstance(metadata, dict) else 0
+        node_name = str(metadata.get("source", "node") or metadata.get("node", "node")) if isinstance(metadata, dict) else "node"
+        logger.info("checkpoint put thread=%s step=%s node=%s id=%s", thread_id, step, node_name, checkpoint_id[:8])
+        try:
+            with SessionLocal() as s:
+                rec = GraphCheckpoint(
+                    checkpoint_id=checkpoint_id,
+                    run_id=thread_id,
+                    step_number=step,
+                    node_name=node_name,
+                    state_json=json.dumps({"checkpoint": checkpoint, "metadata": metadata, "parent_config": config}, default=str),
+                    status=str(metadata.get("writes", {}).get("status", "RUNNING") if isinstance(metadata, dict) else "RUNNING"),
+                )
+                s.merge(rec)
+                s.commit()
+        except Exception as e:
+            logger.warning("SQL checkpoint persist fallback: %s", e)
+        return res
+
+
 

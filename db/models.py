@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, List, Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
@@ -66,7 +66,7 @@ class Property(Base):
     total_units: Mapped[int] = mapped_column(Integer, default=1)
     occupancy_rate: Mapped[float] = mapped_column(Float, default=1.0)
     owner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     units: Mapped[List["Unit"]] = relationship("Unit", back_populates="property", cascade="all, delete-orphan")
 
@@ -91,7 +91,7 @@ class Unit(Base):
     monthly_rent: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="available")  # available, occupied, maintenance, reserved
     is_high_value: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     property: Mapped["Property"] = relationship("Property", back_populates="units")
     leases: Mapped[List["Lease"]] = relationship("Lease", back_populates="unit")
@@ -112,7 +112,7 @@ class Tenant(Base):
     hashed_password: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     leases: Mapped[List["Lease"]] = relationship("Lease", back_populates="tenant")
     maintenance_requests: Mapped[List["MaintenanceRequest"]] = relationship("MaintenanceRequest", back_populates="tenant")
@@ -134,11 +134,11 @@ class Lease(Base):
     status: Mapped[str] = mapped_column(String(30), default="active")  # active, pending_approval, renewed, expired, terminated
     payment_status: Mapped[str] = mapped_column(String(20), default="current")  # current, pending, arrears, disputed
     renewal_status: Mapped[str] = mapped_column(String(30), default="none")  # none, requested, approved, declined
-    renewal_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    renewal_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     requires_executive_signoff: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     unit: Mapped["Unit"] = relationship("Unit", back_populates="leases")
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="leases")
@@ -153,13 +153,13 @@ class Payment(Base):
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.tenant_id"), nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     due_date: Mapped[str] = mapped_column(String(20), nullable=False)
-    payment_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    payment_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_method: Mapped[str] = mapped_column(String(30), default="fawry")  # fawry, credit_card, bank_transfer, cash
     transaction_reference: Mapped[str] = mapped_column(String(60), unique=True, index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # paid, pending, overdue, failed, refunded
     receipt_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     lease: Mapped["Lease"] = relationship("Lease", back_populates="payments")
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="payments")
@@ -181,7 +181,7 @@ class LeaseApplication(Base):
     employment_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     unit: Mapped["Unit"] = relationship("Unit", back_populates="applications")
     applicant: Mapped[Optional["Tenant"]] = relationship("Tenant", back_populates="applications")
@@ -204,8 +204,8 @@ class MaintenanceRequest(Base):
     tenant_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 1 to 5
     tenant_feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     images: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON list
-    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     unit: Mapped["Unit"] = relationship("Unit", back_populates="maintenance_requests")
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="maintenance_requests")
@@ -218,8 +218,8 @@ class ChatSession(Base):
     title: Mapped[str] = mapped_column(String(200), default="محادثة جديدة")
     user_role: Mapped[str] = mapped_column(String(50), default="property_manager")
     user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # FK to tenant_id; null = legacy/unowned
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     messages: Mapped[List["ChatMessage"]] = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
 
@@ -238,7 +238,7 @@ class ChatMessage(Base):
     tool_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     elicitation_payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sse_payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
 
@@ -252,7 +252,7 @@ class GraphCheckpoint(Base):
     node_name: Mapped[str] = mapped_column(String(100), nullable=False)
     state_json: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False)  # RUNNING, PAUSED_HITL, AWAITING_WEBHOOK, FAILED_TICKET, COMPLETED
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class HITLTask(Base):
@@ -267,8 +267,8 @@ class HITLTask(Base):
     task_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, approved, rejected, modified
     decision_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     decided_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class GraphFailureTicket(Base):
@@ -285,8 +285,8 @@ class GraphFailureTicket(Base):
     ticket_status: Mapped[str] = mapped_column(String(20), default="open")  # open, investigating, resolved
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolved_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AgentToolBinding(Base):
@@ -295,7 +295,7 @@ class AgentToolBinding(Base):
     agent_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     tool_name: Mapped[str] = mapped_column(String(100), primary_key=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class RAGDocument(Base):
@@ -306,7 +306,7 @@ class RAGDocument(Base):
     category: Mapped[str] = mapped_column(String(50), default="policy")  # policy, bylaw, standard, engineering
     content: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class RagDocumentEmbedding(Base):
@@ -322,7 +322,7 @@ class RagDocumentEmbedding(Base):
     target_property_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     target_tenant_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class EpisodicMemoryRecord(Base):
@@ -331,7 +331,7 @@ class EpisodicMemoryRecord(Base):
     episode_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     entity_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(100), default="default")
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     event_summary: Mapped[str] = mapped_column(Text, nullable=False)
     context: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     outcome: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -373,7 +373,7 @@ class TourBooking(Base):
     rescheduled_from_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     manager_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     property: Mapped["Property"] = relationship("Property")
     unit: Mapped[Optional["Unit"]] = relationship("Unit")
