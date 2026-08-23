@@ -8,8 +8,8 @@
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/platform
 
-# Enable corepack and activate pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Enable corepack and activate pnpm 9
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 # Install frontend dependencies with layer caching
 COPY platform/package.json platform/pnpm-lock.yaml* ./
