@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------
 # Stage 1: Build React 18/19 Single Page Application (SPA)
 # ------------------------------------------------------------------------------
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /app/platform
 
 # Enable corepack and activate pnpm
