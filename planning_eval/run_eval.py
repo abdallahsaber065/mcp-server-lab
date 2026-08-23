@@ -5,26 +5,26 @@ measuring real wall-clock latency (time.perf_counter()), token counts, LLM API c
 Outputs empirical results to planning_eval/results.json.
 """
 
+import json
+import logging
 import os
 import sys
-import json
 import time
-import logging
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 # Add parent dir to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agent.planning_agent import PlanningAgent
-from planning.environment import Environment
 from planning.decomposition import decompose_goal, execute_plan
 from planning.dynamic_decomposition import dynamic_decomposition
-from planning.plan_and_solve import plan_and_solve
-from planning.tree_of_thoughts import tree_of_thoughts
+from planning.environment import Environment
 from planning.lats import lats
-from planning.self_refine import reflect_and_refine
+from planning.plan_and_solve import plan_and_solve
 from planning.reflexion import reflexion
+from planning.self_refine import reflect_and_refine
+from planning.tree_of_thoughts import tree_of_thoughts
 from web.llm_engine import create_langchain_llm
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -41,7 +41,7 @@ def estimate_tokens(text: str) -> int:
 def eval_single_decomp(tc, llm):
     req = tc["request"]
     res = {}
-    
+
     # Static
     t0 = time.perf_counter()
     try:
@@ -191,7 +191,7 @@ def run_benchmark():
     N = len(test_cases)
     SAMPLE_COUNT = 3
     sample_cases = test_cases[:SAMPLE_COUNT]
-    
+
     logger.info("Starting concurrent empirical execution over %d test cases (sample=%d, max_workers=3)...", N, SAMPLE_COUNT)
 
     metrics = {

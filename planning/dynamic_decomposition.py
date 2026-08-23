@@ -1,4 +1,5 @@
 from typing import Any
+
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -23,7 +24,7 @@ def dynamic_decomposition(goal: str, llm: BaseChatModel, max_steps: int = 4) -> 
     for step in range(max_steps):
         observation = "\n".join(f"{task}: {result}" for task, result in history) or "None"
         try:
-            decision = llm.with_structured_output(
+            decision: Any = llm.with_structured_output(
                 DynamicDecision,
                 method="json_schema",
             ).invoke([
@@ -35,13 +36,15 @@ Completed work and observations:
 Decide the single best next task. Set done to true only when the goal is met.
 When done is true, use an empty string for next_task."""),
             ], temperature=0.1)
-        except Exception as err:
+        except Exception:
             if history:
                 break
             decision = DynamicDecision(done=False, next_task=f"Execute emergency response plan for: {goal}")
-        if decision.done:
+
+        is_done = bool(getattr(decision, "done", False)) if not isinstance(decision, dict) else bool(decision.get("done", False))
+        if is_done:
             break
-        task = decision.next_task.strip()
+        task = str(getattr(decision, "next_task", "")).strip() if not isinstance(decision, dict) else str(decision.get("next_task", "")).strip()
         if not task:
             raise ValueError(f"Dynamic planner omitted next_task at step {step + 1}")
         response = llm.invoke([

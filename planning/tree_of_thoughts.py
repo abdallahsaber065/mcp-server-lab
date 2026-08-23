@@ -3,9 +3,11 @@ Tree of Thoughts (ToT) Search (planning/tree_of_thoughts.py)
 Directly adapts TA reference toolkit's ThoughtCandidates, ThoughtEvaluation, and beam search.
 """
 
+import json
 from typing import Any
+
 from langchain_core.language_models.chat_models import BaseChatModel
-from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models import Thought
 
@@ -55,7 +57,6 @@ class ThoughtEvaluation(BaseModel):
     @classmethod
     def parse_rationale_str(cls, v: Any) -> str:
         if isinstance(v, (dict, list)):
-            import json
             return json.dumps(v, ensure_ascii=False)
         return str(v)
 
@@ -66,7 +67,6 @@ class ThoughtEvaluation(BaseModel):
             data.pop("$defs", None)
             data.pop("definitions", None)
             if "rationale" in data and isinstance(data["rationale"], (dict, list)):
-                import json
                 data["rationale"] = json.dumps(data["rationale"], ensure_ascii=False)
         return data
 
@@ -99,40 +99,49 @@ def tree_of_thoughts(
                 ], temperature=0.3)
                 txt = raw_resp.content if hasattr(raw_resp, "content") else str(raw_resp)
                 clean_txt = txt.replace("```json", "").replace("```", "").strip()
-                import json
                 try:
                     data = json.loads(clean_txt)
                 except Exception:
                     data = {"candidates": [f"Option 1 for {parent.state}", f"Option 2 for {parent.state}"]}
                 generated = ThoughtCandidates.model_validate(data)
-            
-            for state in generated.candidates[:2]:
+
+            candidates_list: list[str] = []
+            if isinstance(generated, ThoughtCandidates):
+                candidates_list = generated.candidates
+            elif hasattr(generated, "candidates"):
+                candidates_list = list(getattr(generated, "candidates", []))
+            elif isinstance(generated, dict) and "candidates" in generated:
+                candidates_list = list(generated["candidates"])
+
+            for state in candidates_list[:2]:
                 try:
-                    judged = llm.with_structured_output(
+                    judged: Any = llm.with_structured_output(
                         ThoughtEvaluation,
                         method="json_schema",
                     ).invoke([
                         ("system", "Independently evaluate a partial solution for property management. Output ONLY raw JSON matching schema."),
                         ("human", f"""Problem: {problem}\nCandidate path: {state}\nScore correctness, feasibility, and progress. Do not reward confident wording."""),
                     ], temperature=0.1)
-                except Exception as e:
-                    raw_resp = llm.invoke([
+                except Exception:
+                    raw_resp: Any = llm.invoke([
                         ("system", "Evaluate path as JSON: {\"score\": float between 0.0 and 1.0, \"rationale\": \"explanation\"}"),
                         ("human", f"Problem: {problem}\nCandidate: {state}")
                     ], temperature=0.1)
-                    txt = raw_resp.content if hasattr(raw_resp, "content") else str(raw_resp)
+                    txt = raw_resp.content if isinstance(getattr(raw_resp, "content", None), str) else str(getattr(raw_resp, "content", raw_resp))
                     clean_txt = txt.replace("```json", "").replace("```", "").strip()
-                    import json
                     try:
                         data = json.loads(clean_txt)
                     except Exception:
                         data = {"score": 0.8, "rationale": "Evaluated candidate path."}
                     judged = ThoughtEvaluation.model_validate(data)
-                
+
+                score_val = float(getattr(judged, "score", 0.8)) if not isinstance(judged, dict) else float(judged.get("score", 0.8))
+                rationale_val = str(getattr(judged, "rationale", "Evaluated candidate path.")) if not isinstance(judged, dict) else str(judged.get("rationale", "Evaluated candidate path."))
+
                 candidates.append(
-                    Thought(state=state, score=judged.score, rationale=judged.rationale)
+                    Thought(state=state, score=score_val, rationale=rationale_val)
                 )
-                
+
         frontier = sorted(candidates, key=lambda item: item.score, reverse=True)[:beam_width]
         if not frontier:
             break

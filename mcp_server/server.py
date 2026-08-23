@@ -1,34 +1,81 @@
+import json
 import os
 import sys
-import json
 import time
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from pydantic import ValidationError
 
 # Add root path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from db.models import Lease, MaintenanceRequest, Property, Tenant, Unit
+from db.repositories.application_repo import ApplicationRepository
+from db.repositories.maintenance_repo import MaintenanceRepository
+from db.repositories.payment_repo import PaymentRepository
+from db.repositories.tenant_repo import TenantRepository
+from db.repositories.tour_repo import TourRepository
+from db.session import get_sync_db, init_sync_db
 from mcp_server.db_helpers import (
-    init_db, query_available_units, query_tenant_lease,
-    create_maintenance_record, update_lease_terms, get_db_connection
+    create_maintenance_record,
+    init_db,
+    query_available_units,
+    query_tenant_lease,
+    update_lease_terms,
 )
+from mcp_server.notifications import ToolListChangedNotification, dispatcher
 from mcp_server.schemas import (
-    QueryUnitsArgs, LookupLeaseArgs, MaintenanceRequestArgs,
-    ModifyLeaseArgs, BatchAuditArgs
+    BatchAuditArgs,
+    BookTourArgs,
+    CancelTourArgs,
+    GetMyMaintenanceRequestsArgs,
+    ListPaymentsArgs,
+    ListToursArgs,
+    LookupLeaseArgs,
+    MaintenanceRequestArgs,
+    ModifyLeaseArgs,
+    PayRentArgs,
+    QueryUnitsArgs,
+    RenewLeaseArgs,
+    RescheduleTourArgs,
+    SubmitLeaseApplicationArgs,
+    UpdateTourStatusArgs,
 )
-# Week 3: rag/ and memory/ moved to top-level packages (rag/, memory/)
-# Old mcp_server/rag and mcp_server/memory removed — see Week 3 instruction files
+from services.lease_service import LeaseService
+from services.maintenance_service import MaintenanceService
+from services.property_service import PropertyService
+from services.tool_registry_service import ToolRegistryService
+
 
 class CornerstoneMCPServer:
     """Cornerstone Realty Group MCP Server implementing protocol concerns."""
-    
+
     def __init__(self):
         self.name = "cornerstone-realty-mcp"
         self.version = "1.0.0"
         self.protocol_version = "2025-06-18"
         init_db()
-        self.current_user_role = "property_manager"  # Default role for notification demo
-        
+        init_sync_db()
+        self.current_user_role = "property_manager"
+
+    def get_agent_tool_bindings(self, agent_id: str) -> Dict[str, bool]:
+        """Return enabled status for tools assigned to a specific agent via ToolRegistryService."""
+        with next(get_sync_db()) as session:
+            return ToolRegistryService.get_agent_tools(session, agent_id)
+
+    def toggle_agent_tool(self, agent_id: str, tool_name: str, is_enabled: bool) -> bool:
+        """Dynamically enable or disable a tool for an agent at runtime via ToolRegistryService."""
+        active_tools = [t["name"] for t in self.list_tools(agent_id=agent_id)]
+        with next(get_sync_db()) as session:
+            return ToolRegistryService.toggle_tool(
+                session=session,
+                agent_id=agent_id,
+                tool_name=tool_name,
+                is_enabled=is_enabled,
+                current_role=self.current_user_role,
+                active_tools=active_tools
+            )
+
     def get_capabilities(self) -> Dict[str, Any]:
         """Declare capability negotiation capabilities."""
         return {
@@ -47,12 +94,11 @@ class CornerstoneMCPServer:
             "protocolVersion": self.protocol_version
         }
 
-
-    def list_tools(self, role: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Return available tools filtered by authenticated user role."""
+    def list_tools(self, role: Optional[str] = None, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Return available tools filtered by authenticated user role and runtime agent bindings."""
         active_role = role or self.current_user_role
-        
-        tools = [
+
+        all_tools = [
             {
                 "name": "lookup_available_units",
                 "description": "Query available residential/commercial property units by property ID or city location.",
@@ -60,7 +106,7 @@ class CornerstoneMCPServer:
             },
             {
                 "name": "get_tenant_lease",
-                "description": "Retrieve active or historical lease agreement details for a registered tenant by email.",
+                "description": "Retrieve active or historical lease agreement details for a registered tenant by email (supports multi-lease queries).",
                 "inputSchema": LookupLeaseArgs.model_json_schema()
             },
             {
@@ -68,24 +114,81 @@ class CornerstoneMCPServer:
                 "description": "File a maintenance or repair ticket for a property unit.",
                 "inputSchema": MaintenanceRequestArgs.model_json_schema()
             },
-            # Week 3: search_knowledge_base and recall_tenant_memories moved to top-level rag/ and memory/
+            {
+                "name": "get_my_maintenance_requests",
+                "description": "Retrieve all maintenance tickets filed by a tenant with optional status filtering.",
+                "inputSchema": GetMyMaintenanceRequestsArgs.model_json_schema()
+            },
+            {
+                "name": "book_property_tour",
+                "description": "Schedule an in-person, 3D Matterport guided, or self-guided viewing appointment for a property or unit.",
+                "inputSchema": BookTourArgs.model_json_schema()
+            },
+            {
+                "name": "list_tour_bookings",
+                "description": "List scheduled property viewing appointments with status, property, or email filters.",
+                "inputSchema": ListToursArgs.model_json_schema()
+            },
+            {
+                "name": "cancel_tour_booking",
+                "description": "Cancel a scheduled property viewing tour with a specified cancellation reason.",
+                "inputSchema": CancelTourArgs.model_json_schema()
+            },
+            {
+                "name": "reschedule_tour_booking",
+                "description": "Reschedule a property tour appointment to a new date and time slot.",
+                "inputSchema": RescheduleTourArgs.model_json_schema()
+            },
+            {
+                "name": "submit_lease_application",
+                "description": "Submit a digital rental lease application for an available unit.",
+                "inputSchema": SubmitLeaseApplicationArgs.model_json_schema()
+            },
+            {
+                "name": "list_tenant_payments",
+                "description": "Query payment history, invoices, receipts, and outstanding rent ledger for a tenant or lease.",
+                "inputSchema": ListPaymentsArgs.model_json_schema()
+            },
+            {
+                "name": "record_rent_payment",
+                "description": "Execute or record a rent installment payment for a lease agreement.",
+                "inputSchema": PayRentArgs.model_json_schema()
+            },
+            {
+                "name": "request_lease_renewal",
+                "description": "Submit a formal request to renew an existing active lease agreement.",
+                "inputSchema": RenewLeaseArgs.model_json_schema()
+            },
         ]
-        
+
         # Role-gated write tools (Demonstrates Notifications & defensive auth)
         if active_role in ("property_manager", "executive_admin"):
-            tools.append({
+            all_tools.append({
+                "name": "update_tour_status",
+                "description": "Approve, reschedule, complete, or cancel a prospect tour booking.",
+                "inputSchema": UpdateTourStatusArgs.model_json_schema()
+            })
+            all_tools.append({
                 "name": "modify_lease_terms",
                 "description": "Update lease terms or monthly rent. Triggers human elicitation if discount > 15% or high value.",
                 "inputSchema": ModifyLeaseArgs.model_json_schema()
             })
-            tools.append({
+            all_tools.append({
                 "name": "run_property_audit",
                 "description": "Run a comprehensive compliance audit report for a property. Reports live progress updates.",
                 "inputSchema": BatchAuditArgs.model_json_schema()
             })
-            # Week 3: record_tenant_memory moved to top-level memory/
-            
-        return tools
+
+        # Apply runtime agent dynamic bindings if agent_id is provided
+        if agent_id:
+            bindings = self.get_agent_tool_bindings(agent_id)
+            filtered_tools = []
+            for t in all_tools:
+                if bindings.get(t["name"], True):
+                    filtered_tools.append(t)
+            return filtered_tools
+
+        return all_tools
 
     def list_resources(self) -> List[Dict[str, Any]]:
         """Return exposed static resources."""
@@ -161,10 +264,20 @@ class CornerstoneMCPServer:
 
             elif name == "get_tenant_lease":
                 validated = LookupLeaseArgs(**arguments)
-                result = query_tenant_lease(email=validated.email)
-                if not result:
-                    return {"status": "not_found", "message": f"No active lease found for {validated.email}"}
-                return {"status": "success", "result": result}
+                with next(get_sync_db()) as session:
+                    repo = TenantRepository(session)
+                    leases = repo.get_all_leases(validated.email)
+                    if validated.active_only:
+                        leases = [l for l in leases if l.get("is_active")]
+                    if not leases:
+                        return {"status": "not_found", "message": f"No lease records found for {validated.email}"}
+                    return {
+                        "status": "success",
+                        "leases": leases,
+                        "count": len(leases),
+                        "active_count": len([l for l in leases if l.get("is_active")]),
+                        "primary_lease": leases[0]
+                    }
 
             elif name == "submit_maintenance_request":
                 validated = MaintenanceRequestArgs(**arguments)
@@ -176,16 +289,168 @@ class CornerstoneMCPServer:
                 )
                 return {"status": "success", "result": res}
 
+            elif name == "get_my_maintenance_requests":
+                validated = GetMyMaintenanceRequestsArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = MaintenanceRepository(session)
+                    tickets = repo.get_by_tenant(validated.tenant_id)
+                    if validated.status:
+                        tickets = [t for t in tickets if t.get("status") == validated.status]
+                    return {"status": "success", "requests": tickets, "count": len(tickets)}
+
+            elif name == "book_property_tour":
+                validated = BookTourArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    booking = repo.create_booking(
+                        property_id=validated.property_id,
+                        unit_id=validated.unit_id,
+                        contact_name=validated.contact_name,
+                        contact_email=validated.contact_email,
+                        contact_phone=validated.contact_phone,
+                        tour_type=validated.tour_type,
+                        requested_date=validated.requested_date,
+                        time_slot=validated.time_slot,
+                        notes=validated.notes
+                    )
+                    return {
+                        "status": "success",
+                        "message": f"Tour booked successfully for {booking['contact_name']} at {booking['property_name']} on {booking['requested_date']} at {booking['time_slot']}.",
+                        "booking": booking
+                    }
+
+            elif name == "list_tour_bookings":
+                validated = ListToursArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    bookings = repo.list_bookings(
+                        property_id=validated.property_id,
+                        status=validated.status,
+                        email=validated.contact_email
+                    )
+                    return {"status": "success", "bookings": bookings, "count": len(bookings)}
+
+            elif name == "cancel_tour_booking":
+                validated = CancelTourArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    cancelled = repo.cancel_booking(
+                        booking_id=validated.booking_id,
+                        cancellation_reason=validated.cancellation_reason or "User cancelled viewing"
+                    )
+                    if not cancelled:
+                        return {"status": "not_found", "message": f"Tour booking #{validated.booking_id} not found."}
+                    return {
+                        "status": "success",
+                        "message": f"Tour booking #{validated.booking_id} has been cancelled.",
+                        "booking": cancelled
+                    }
+
+            elif name == "reschedule_tour_booking":
+                validated = RescheduleTourArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    rescheduled = repo.reschedule_booking(
+                        booking_id=validated.booking_id,
+                        new_date=validated.new_date,
+                        new_slot=validated.new_time_slot,
+                        notes=validated.notes
+                    )
+                    if not rescheduled:
+                        return {"status": "not_found", "message": f"Tour booking #{validated.booking_id} not found."}
+                    return {
+                        "status": "success",
+                        "message": f"Tour booking #{validated.booking_id} rescheduled to {validated.new_date} at {validated.new_time_slot}.",
+                        "booking": rescheduled
+                    }
+
+            elif name == "submit_lease_application":
+                validated = SubmitLeaseApplicationArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = ApplicationRepository(session)
+                    app = repo.create_application(
+                        unit_id=validated.unit_id,
+                        applicant_name=validated.applicant_name,
+                        applicant_email=validated.applicant_email,
+                        proposed_monthly_rent=validated.proposed_monthly_rent,
+                        lease_duration_months=validated.lease_duration_months,
+                        move_in_date=validated.move_in_date,
+                        applicant_phone=validated.applicant_phone,
+                        employment_details=validated.employment_details
+                    )
+                    return {
+                        "status": "success",
+                        "message": f"Digital lease application #{app['application_id']} submitted for {app['applicant_name']}.",
+                        "application": app
+                    }
+
+            elif name == "list_tenant_payments":
+                validated = ListPaymentsArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = PaymentRepository(session)
+                    if validated.tenant_id:
+                        payments = repo.get_by_tenant(validated.tenant_id)
+                    elif validated.lease_id:
+                        payments = repo.get_by_lease(validated.lease_id)
+                    else:
+                        payments = []
+                    return {"status": "success", "payments": payments, "count": len(payments)}
+
+            elif name == "record_rent_payment":
+                validated = PayRentArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = PaymentRepository(session)
+                    receipt = repo.record_payment(
+                        lease_id=validated.lease_id,
+                        tenant_id=validated.tenant_id,
+                        amount=validated.amount,
+                        payment_method=validated.payment_method,
+                        notes=validated.notes
+                    )
+                    return {
+                        "status": "success",
+                        "message": f"Payment of EGP {validated.amount:,.2f} recorded successfully.",
+                        "receipt": receipt
+                    }
+
+            elif name == "request_lease_renewal":
+                validated = RenewLeaseArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    lease = session.get(Lease, validated.lease_id)
+                    if not lease:
+                        return {"status": "not_found", "message": f"Lease #{validated.lease_id} not found."}
+                    lease.renewal_status = "requested"
+                    lease.notes = f"{lease.notes or ''} | Renewal requested for {validated.extension_months} months: {validated.notes or ''}".strip()
+                    session.commit()
+                    return {
+                        "status": "success",
+                        "message": f"Renewal request registered for Lease #{validated.lease_id} ({validated.extension_months} months extension).",
+                        "lease_id": validated.lease_id,
+                        "renewal_status": "requested"
+                    }
+
+            elif name == "update_tour_status":
+                validated = UpdateTourStatusArgs(**arguments)
+                with next(get_sync_db()) as session:
+                    repo = TourRepository(session)
+                    updated = repo.update_status(
+                        booking_id=validated.booking_id,
+                        status=validated.status,
+                        manager_notes=validated.manager_notes
+                    )
+                    if not updated:
+                        return {"status": "not_found", "message": f"Tour booking #{validated.booking_id} not found."}
+                    return {"status": "success", "message": f"Tour booking #{validated.booking_id} updated to '{validated.status}'.", "booking": updated}
+
             elif name == "modify_lease_terms":
                 validated = ModifyLeaseArgs(**arguments)
-                
                 res = update_lease_terms(
                     lease_id=validated.lease_id,
                     new_rent=validated.new_monthly_rent,
                     duration_months=validated.duration_months,
                     signed_off_by_executive=validated.executive_approval_given
                 )
-                
+
                 if res.get("requires_elicitation"):
                     return {
                         "status": "elicitation_required",
@@ -199,43 +464,34 @@ class CornerstoneMCPServer:
 
             elif name == "run_property_audit":
                 validated = BatchAuditArgs(**arguments)
-                
-                conn = get_db_connection()
-                cur = conn.cursor()
-                cur.execute("SELECT property_id, name FROM properties WHERE property_id = ?;", (validated.property_id,))
-                prop_row = cur.fetchone()
-                if not prop_row:
-                    conn.close()
+                with next(get_sync_db()) as session:
+                    prop = session.get(Property, validated.property_id)
+                    if not prop:
+                        return {
+                            "status": "error",
+                            "error_type": "ToolExecutionException",
+                            "message": f"Property ID {validated.property_id} not found in property database. Please verify the property identifier."
+                        }
+
+                    progress_history = []
+                    for step in range(1, 6):
+                        pct = step * 20
+                        msg = f"Auditing {prop.name} (ID: {validated.property_id}) - Step {step}/5 ({pct}%)"
+                        progress_history.append({"step": step, "percentage": pct, "message": msg})
+
+                    units = session.query(Unit).filter(Unit.property_id == validated.property_id).all()
+                    total_u = len(units)
+                    occupied_u = len([u for u in units if u.status == "occupied"])
+
                     return {
-                        "status": "error",
-                        "error_type": "ToolExecutionException",
-                        "message": f"Property ID {validated.property_id} not found in property database. Please verify the property identifier."
+                        "status": "success",
+                        "property_id": validated.property_id,
+                        "property_name": prop.name,
+                        "total_units": total_u,
+                        "occupied_units": occupied_u,
+                        "occupancy_rate": f"{(occupied_u / total_u * 100):.1f}%" if total_u > 0 else "0%",
+                        "progress_logs": progress_history
                     }
-
-                progress_history = []
-                for step in range(1, 6):
-                    pct = step * 20
-                    msg = f"Auditing {prop_row['name']} (ID: {validated.property_id}) - Step {step}/5 ({pct}%)"
-                    progress_history.append({"step": step, "percentage": pct, "message": msg})
-
-                cur.execute("SELECT COUNT(*) FROM units WHERE property_id = ?;", (validated.property_id,))
-                total_u = cur.fetchone()[0]
-                cur.execute("SELECT COUNT(*) FROM units WHERE property_id = ? AND status = 'occupied';", (validated.property_id,))
-                occupied_u = cur.fetchone()[0]
-                conn.close()
-
-                return {
-                    "status": "success",
-                    "property_id": validated.property_id,
-                    "property_name": prop_row["name"],
-                    "total_units": total_u,
-                    "occupied_units": occupied_u,
-                    "occupancy_rate": f"{(occupied_u / total_u * 100):.1f}%" if total_u > 0 else "0%",
-                    "progress_logs": progress_history
-                }
-
-            # Week 3: search_knowledge_base, record_tenant_memory, recall_tenant_memories
-            # moved to top-level rag/ and memory/ packages
 
             else:
                 return {"status": "error", "error_type": "UnknownTool", "message": f"Requested tool '{name}' is not recognized in current permissions."}
@@ -277,6 +533,7 @@ class CornerstoneMCPServer:
             "new_role": new_role,
             "available_tools": [t["name"] for t in self.list_tools(new_role)]
         }
+
 
 if __name__ == "__main__":
     server = CornerstoneMCPServer()

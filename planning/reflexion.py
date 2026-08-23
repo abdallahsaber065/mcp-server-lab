@@ -4,9 +4,11 @@ Directly adapts TA reference toolkit's ReflexionTrial, ReflexionResult, and epis
 """
 
 from dataclasses import dataclass
+
 from langchain_core.language_models.chat_models import BaseChatModel
-from .models import EnvironmentFeedback
+
 from .environment import Environment
+from .models import EnvironmentFeedback
 
 
 @dataclass
@@ -38,38 +40,38 @@ def reflexion(
     trials: list[ReflexionTrial] = []
     best_attempt = ""
     best_score = -1.0
-    
+
     for number in range(1, max_trials + 1):
         recalled = "\n".join(f"- {item}" for item in memory[-memory_size:]) or "- No prior trials."
         response = llm.invoke([
             ("system", "You are the acting agent in a Reflexion loop. Attempt the entire task again."),
             ("human", f"""Task: {task}\nEpisodic memory from previous failed trials:\n{recalled}\n\nProduce complete deliverable."""),
         ], temperature=0.2)
-        
+
         attempt = response.content
         if not isinstance(attempt, str) or not attempt.strip():
             raise RuntimeError("Model returned an empty response")
         attempt = attempt.strip()
-        
+
         feedback = environment.evaluate(attempt)
         trial = ReflexionTrial(number=number, attempt=attempt, feedback=feedback)
-        
+
         if feedback.score > best_score:
             best_attempt, best_score = attempt, feedback.score
         if feedback.success:
             trials.append(trial)
             return ReflexionResult(True, attempt, trials, memory[-memory_size:])
-            
+
         response = llm.invoke([
             ("system", "Generate a concise first-person Reflexion memory, not a revised answer."),
             ("human", f"""Task: {task}\nFailed attempt:\n{attempt}\n\nExternal feedback (score {feedback.score}):\n{chr(10).join('- ' + item for item in feedback.details)}\n\nState what I did wrong. Start with 'I'."""),
         ], temperature=0.2)
-        
+
         reflection = response.content
         if not isinstance(reflection, str) or not reflection.strip():
             raise RuntimeError("Model returned an empty response")
         trial.reflection = reflection.strip()
         trials.append(trial)
         memory.append(reflection.strip())
-        
+
     return ReflexionResult(False, best_attempt, trials, memory[-memory_size:])

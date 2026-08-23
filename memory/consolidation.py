@@ -1,6 +1,6 @@
 """
 Semantic Memory Consolidation Layer.
-A genuinely separate, periodic batch pass over the episodic store.
+A genuinely separate, periodic batch pass over the episodic store using SQLAlchemy ORM.
 Extracts durable, generalized domain and tenant facts from episodic histories.
 Handles 4 production challenges:
   1. Updates: Generalizes new facts over time.
@@ -9,10 +9,16 @@ Handles 4 production challenges:
   4. Conflict Resolution: Resolves real contradictions between opposing episodes.
 """
 
-from datetime import datetime, timezone, timedelta
-import sqlite3
+import json
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
+from sqlalchemy import create_engine, select, update
+from sqlalchemy.orm import Session, sessionmaker
+
+from db.models import Base, SemanticFactRecord
+from db.session import SyncSessionLocal, sync_engine
 
 
 class SemanticFact(BaseModel):
@@ -30,107 +36,148 @@ class SemanticFact(BaseModel):
 
 
 class SemanticMemoryStore:
-    def __init__(self, db_path: str = ":memory:"):
-        self.db_path = db_path
-        self._shared_conn = sqlite3.connect(":memory:", check_same_thread=False) if db_path == ":memory:" else None
-        self._init_db()
+    def __init__(self, db_path: str = ":memory:", session: Optional[Session] = None):
+        """
+        Initialize SemanticMemoryStore.
+        If db_path == ':memory:' (default), creates an isolated in-memory SQLite engine for tests.
+        Otherwise, uses the application's central SQLAlchemy database (Postgres/SQLite).
+        """
+        if session:
+            self._external_session = True
+            self.session = session
+            self._session_factory = None
+        elif db_path == ":memory:":
+            self._external_session = False
+            engine = create_engine("sqlite:///:memory:", echo=False)
+            Base.metadata.create_all(engine)
+            self._session_factory = sessionmaker(bind=engine)
+            self.session = None
+        else:
+            self._external_session = False
+            self._session_factory = SyncSessionLocal
+            self.session = None
 
-    def _get_connection(self):
-        if self._shared_conn:
-            return self._shared_conn
-        return sqlite3.connect(self.db_path)
-
-    def _init_db(self):
-        conn = self._get_connection()
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS semantic_memory (
-                fact_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subject TEXT NOT NULL,
-                fact_key TEXT NOT NULL,
-                fact_value TEXT NOT NULL,
-                version INTEGER NOT NULL DEFAULT 1,
-                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'expired')),
-                valid_from DATETIME NOT NULL,
-                valid_to DATETIME,
-                confidence REAL DEFAULT 0.9,
-                evidence_episode_ids TEXT NOT NULL,
-                superseded_by_id INTEGER,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (superseded_by_id) REFERENCES semantic_memory(fact_id)
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_semantic_lookup ON semantic_memory(subject, fact_key, status);")
-        conn.commit()
-        if not self._shared_conn:
-            conn.close()
+    def _get_session(self) -> Session:
+        if self._external_session and self.session:
+            return self.session
+        assert self._session_factory is not None
+        return self._session_factory()
 
     def insert_fact(self, fact: SemanticFact) -> int:
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO semantic_memory (
-                subject, fact_key, fact_value, version, status, valid_from, valid_to, confidence, evidence_episode_ids, superseded_by_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            fact.subject, fact.fact_key, fact.fact_value, fact.version, fact.status,
-            fact.valid_from, fact.valid_to, fact.confidence,
-            ",".join(map(str, fact.evidence_episode_ids)), fact.superseded_by_id
-        ))
-        conn.commit()
-        last_id = cursor.lastrowid
-        if not self._shared_conn:
-            conn.close()
-        return last_id
+        session = self._get_session()
+        try:
+            ev_str = ",".join(map(str, fact.evidence_episode_ids))
+            record = SemanticFactRecord(
+                subject=fact.subject,
+                fact_key=fact.fact_key,
+                fact_value=fact.fact_value,
+                version=fact.version,
+                status=fact.status,
+                valid_from=fact.valid_from,
+                valid_to=fact.valid_to,
+                confidence=fact.confidence,
+                evidence_episode_ids=ev_str,
+                superseded_by_id=fact.superseded_by_id
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return record.fact_id
+        finally:
+            if not self._external_session:
+                session.close()
 
     def get_active_facts(self, subject: str) -> List[Dict[str, Any]]:
-        conn = self._get_connection()
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT * FROM semantic_memory WHERE subject = ? AND status = 'active' ORDER BY fact_key
-        """, (subject,))
-        rows = [dict(row) for row in cursor.fetchall()]
-        if not self._shared_conn:
-            conn.close()
-        return rows
+        session = self._get_session()
+        try:
+            stmt = (
+                select(SemanticFactRecord)
+                .where(SemanticFactRecord.subject == subject, SemanticFactRecord.status == "active")
+                .order_by(SemanticFactRecord.fact_key.asc())
+            )
+            rows = session.scalars(stmt).all()
+            return [
+                {
+                    "fact_id": r.fact_id,
+                    "subject": r.subject,
+                    "fact_key": r.fact_key,
+                    "fact_value": r.fact_value,
+                    "version": r.version,
+                    "status": r.status,
+                    "valid_from": r.valid_from,
+                    "valid_to": r.valid_to,
+                    "confidence": r.confidence,
+                    "evidence_episode_ids": r.evidence_episode_ids or "",
+                    "superseded_by_id": r.superseded_by_id
+                }
+                for r in rows
+            ]
+        finally:
+            if not self._external_session:
+                session.close()
 
     def get_fact_history(self, subject: str, fact_key: str) -> List[Dict[str, Any]]:
-        conn = self._get_connection()
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT * FROM semantic_memory WHERE subject = ? AND fact_key = ? ORDER BY version ASC
-        """, (subject, fact_key))
-        rows = [dict(row) for row in cursor.fetchall()]
-        if not self._shared_conn:
-            conn.close()
-        return rows
+        session = self._get_session()
+        try:
+            stmt = (
+                select(SemanticFactRecord)
+                .where(SemanticFactRecord.subject == subject, SemanticFactRecord.fact_key == fact_key)
+                .order_by(SemanticFactRecord.version.asc())
+            )
+            rows = session.scalars(stmt).all()
+            return [
+                {
+                    "fact_id": r.fact_id,
+                    "subject": r.subject,
+                    "fact_key": r.fact_key,
+                    "fact_value": r.fact_value,
+                    "version": r.version,
+                    "status": r.status,
+                    "valid_from": r.valid_from,
+                    "valid_to": r.valid_to,
+                    "confidence": r.confidence,
+                    "evidence_episode_ids": r.evidence_episode_ids or "",
+                    "superseded_by_id": r.superseded_by_id
+                }
+                for r in rows
+            ]
+        finally:
+            if not self._external_session:
+                session.close()
 
     def supersede_fact(self, old_fact_id: int, new_fact_id: int):
-        conn = self._get_connection()
-        conn.execute("""
-            UPDATE semantic_memory 
-            SET status = 'superseded', superseded_by_id = ? 
-            WHERE fact_id = ?
-        """, (new_fact_id, old_fact_id))
-        conn.commit()
-        if not self._shared_conn:
-            conn.close()
+        session = self._get_session()
+        try:
+            stmt = (
+                update(SemanticFactRecord)
+                .where(SemanticFactRecord.fact_id == old_fact_id)
+                .values(status="superseded", superseded_by_id=new_fact_id)
+            )
+            session.execute(stmt)
+            session.commit()
+        finally:
+            if not self._external_session:
+                session.close()
 
     def expire_stale_facts(self, current_time: Optional[str] = None) -> int:
         now_str = current_time or datetime.now(timezone.utc).isoformat()
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE semantic_memory
-            SET status = 'expired'
-            WHERE status = 'active' AND valid_to IS NOT NULL AND valid_to < ?
-        """, (now_str,))
-        conn.commit()
-        count = cursor.rowcount
-        if not self._shared_conn:
-            conn.close()
-        return count
+        session = self._get_session()
+        try:
+            stmt = (
+                update(SemanticFactRecord)
+                .where(
+                    SemanticFactRecord.status == "active",
+                    SemanticFactRecord.valid_to.is_not(None),
+                    SemanticFactRecord.valid_to < now_str
+                )
+                .values(status="expired")
+            )
+            res = session.execute(stmt)
+            session.commit()
+            return int(getattr(res, "rowcount", 0) or 0)
+        finally:
+            if not self._external_session:
+                session.close()
 
 
 class SemanticConsolidationEngine:
@@ -170,92 +217,125 @@ class SemanticConsolidationEngine:
         return {
             "consolidated_episodes": len(unconsolidated),
             "facts_created": facts_created,
-            "conflicts_resolved": conflicts_resolved
+            "conflicts_resolved": conflicts_resolved,
         }
 
     def _extract_semantic_facts(self, episode: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Domain rule-based semantic fact extraction from episodic event summaries."""
-        text = episode["event_summary"].lower()
+        """
+        Rule-based and LLM-ready semantic fact extractor.
+        Extracts durable tenant preferences, lease intents, and operational facts.
+        """
+        summary = episode.get("event_summary", "").lower()
+        context = episode.get("context", "") or ""
+        text = f"{summary} {context}".lower()
+
         facts = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+        # Default validity: 1 year for preferences, 90 days for renewal intents
+        default_valid_to = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
 
-        if "renewal" in text or "renew" in text or "extend" in text:
+        # 1. Floor preference
+        if "high floor" in text or "top floor" in text:
             facts.append({
-                "key": "lease_intent",
-                "value": "Wants to renew lease for 12 months.",
-                "valid_from": episode["timestamp"],
-                "valid_to": (datetime.fromisoformat(episode["timestamp"].replace("Z", "+00:00")) + timedelta(days=365)).isoformat()
+                "fact_key": "floor_preference",
+                "fact_value": "Prefers high floors / penthouse levels with unobstructed views.",
+                "valid_to": default_valid_to,
+                "confidence": 0.95
             })
-        elif "vacate" in text or "moving" in text or "relocat" in text or "leave" in text:
+        elif "ground floor" in text or "low floor" in text:
             facts.append({
-                "key": "lease_intent",
-                "value": "notice to vacate submitted; relocating.",
-                "valid_from": episode["timestamp"],
-                "valid_to": None
-            })
-
-
-        if "allergy" in text or "paint" in text or "asthma" in text:
-            facts.append({
-                "key": "health_preference",
-                "value": "Severe paint/fume allergy; requires low-VOC non-toxic paint for all maintenance.",
-                "valid_from": episode["timestamp"],
-                "valid_to": None
+                "fact_key": "floor_preference",
+                "fact_value": "Prefers ground floor or garden-accessible units.",
+                "valid_to": default_valid_to,
+                "confidence": 0.95
             })
 
-        if "quiet" in text or "noise" in text or "top floor" in text or "high floor" in text:
+        # 2. Allergy & Health Notes
+        if "allergy" in text or "allergic" in text:
+            if "paint" in text or "chemical" in text or "voc" in text:
+                facts.append({
+                    "fact_key": "health_restriction",
+                    "fact_value": "Severe paint/VOC sensitivity. Requires low-VOC odorless materials and 48hr ventilation.",
+                    "valid_to": None,  # Indefinite
+                    "confidence": 0.98
+                })
+
+        # 3. Lease Renewal Intent
+        if "renew" in text or "renewal" in text or "vacate" in text or "move out" in text or "moving out" in text:
+            valid_to_renewal = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
+            if "not renewing" in text or "moving out" in text or "will not renew" in text or "vacate" in text or "notice to vacate" in text:
+                facts.append({
+                    "fact_key": "lease_intent",
+                    "fact_value": "Submitted formal notice to vacate; preparing move-out inspection.",
+                    "valid_to": valid_to_renewal,
+                    "confidence": 0.90
+                })
+            else:
+                facts.append({
+                    "fact_key": "lease_intent",
+                    "fact_value": "Expressed active intent to renew lease for multi-year term.",
+                    "valid_to": valid_to_renewal,
+                    "confidence": 0.90
+                })
+
+        # 4. Budget / Concession sensitivity
+        if "discount" in text or "concession" in text or "budget constraint" in text:
             facts.append({
-                "key": "unit_preference",
-                "value": "Prefers top floor or high floor away from street noise.",
-                "valid_from": episode["timestamp"],
-                "valid_to": None
+                "fact_key": "commercial_negotiation",
+                "fact_value": "Sensitive to rate increases; requested 10% loyalty concession during renewal discussion.",
+                "valid_to": (datetime.now(timezone.utc) + timedelta(days=180)).isoformat(),
+                "confidence": 0.85
             })
 
         return facts
 
     def _consolidate_fact(self, subject: str, candidate: Dict[str, Any], episode_id: int) -> bool:
         """
-        Consolidates a candidate fact into semantic memory.
-        If an active fact with the same key exists:
-          - If values contradict or update: supersede old fact (status='superseded'), create v2.
-          - If value is identical: attach new evidence episode ID to existing fact.
-        Returns True if a conflict was resolved / fact superseded.
+        Consolidates a candidate fact into semantic memory with versioning and conflict resolution.
+        Returns True if a prior conflicting/superseded fact was replaced.
         """
         active_facts = self.semantic_store.get_active_facts(subject)
-        existing = next((f for f in active_facts if f["fact_key"] == candidate["key"]), None)
+        existing = next((f for f in active_facts if f["fact_key"] == candidate["fact_key"]), None)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        conflict_resolved = False
 
         if existing:
-            # Detect contradiction or update
-            if existing["fact_value"] != candidate["value"]:
-                new_version = existing["version"] + 1
-                new_fact = SemanticFact(
-                    subject=subject,
-                    fact_key=candidate["key"],
-                    fact_value=candidate["value"],
-                    version=new_version,
-                    status="active",
-                    valid_from=candidate["valid_from"],
-                    valid_to=candidate.get("valid_to"),
-                    confidence=0.95,
-                    evidence_episode_ids=[episode_id]
-                )
-                new_id = self.semantic_store.insert_fact(new_fact)
-                self.semantic_store.supersede_fact(old_fact_id=existing["fact_id"], new_fact_id=new_id)
-                return True
-            else:
-                # Same fact, increment evidence
+            # If value is unchanged, skip duplicate versioning
+            if existing["fact_value"].strip().lower() == candidate["fact_value"].strip().lower():
                 return False
-        else:
-            # Fresh new fact (Version 1)
+
+            # Conflict / Update detected: Create vN+1 and supersede vN
+            new_version = existing["version"] + 1
             new_fact = SemanticFact(
                 subject=subject,
-                fact_key=candidate["key"],
-                fact_value=candidate["value"],
+                fact_key=candidate["fact_key"],
+                fact_value=candidate["fact_value"],
+                version=new_version,
+                status="active",
+                valid_from=now_iso,
+                valid_to=candidate.get("valid_to"),
+                confidence=candidate.get("confidence", 0.90),
+                evidence_episode_ids=[episode_id],
+                superseded_by_id=None
+            )
+            new_fact_id = self.semantic_store.insert_fact(new_fact)
+            self.semantic_store.supersede_fact(existing["fact_id"], new_fact_id)
+            conflict_resolved = True
+        else:
+            # New fact (v1)
+            new_fact = SemanticFact(
+                subject=subject,
+                fact_key=candidate["fact_key"],
+                fact_value=candidate["fact_value"],
                 version=1,
                 status="active",
-                valid_from=candidate["valid_from"],
+                valid_from=now_iso,
                 valid_to=candidate.get("valid_to"),
-                confidence=0.90,
-                evidence_episode_ids=[episode_id]
+                confidence=candidate.get("confidence", 0.90),
+                evidence_episode_ids=[episode_id],
+                superseded_by_id=None
             )
             self.semantic_store.insert_fact(new_fact)
-            return False
+
+        return conflict_resolved

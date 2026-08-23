@@ -3,10 +3,11 @@ Executable Pytest Suite for Context Pruning & Self-RAG Verification.
 """
 
 import pytest
+
 from context_eval.strategies import (
-    apply_sliding_window,
     apply_observation_masking,
     apply_recursive_summarization,
+    apply_sliding_window,
     apply_zone_based_pruning,
 )
 from context_eval.test_suite import generate_long_context_transcript
@@ -33,7 +34,7 @@ def test_self_rag_critique_rejection():
     verifier = SelfRAGVerifier()
     query = "What is the penalty for early lease termination under Section 4.2b?"
     evidence = ["Section 4.2b specifies an early termination penalty fee equal to 2 months rent with 60 days notice."]
-    
+
     # Grounded answer passes
     grounded_ans = "Under Section 4.2b, the early termination penalty is two months rent."
     res1 = verifier.verify_generation(query, evidence, grounded_ans)

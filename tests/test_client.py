@@ -46,16 +46,12 @@ from mcp_server.server import CornerstoneMCPServer
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="function")
-def server(tmp_path) -> CornerstoneMCPServer:
-    """Fresh server with a reset database for every test."""
-    test_db = str(tmp_path / "test_client_realty.db")
-    os.environ["MCP_DB_FILE"] = test_db
-    init_db(reset=True)
+@pytest.fixture(scope="module")
+def server() -> CornerstoneMCPServer:
+    """Shared server with pre-seeded database for the test module."""
+    init_db(reset=False)
     srv = CornerstoneMCPServer()
     yield srv
-    if "MCP_DB_FILE" in os.environ:
-        del os.environ["MCP_DB_FILE"]
 
 
 @pytest.fixture(scope="function")

@@ -1,11 +1,15 @@
 """Agentic RAG: Multi-Hop Reasoning Loop with Query Decomposition & Rewriting."""
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from rag.hybrid_rag import HybridSearchEngine
 
 
 class AgenticRAGRouter:
-    def __init__(self, hybrid_engine: HybridSearchEngine):
-        self.hybrid_engine = hybrid_engine
+    def __init__(self, hybrid_engine: Any):
+        if isinstance(hybrid_engine, HybridSearchEngine):
+            self.hybrid_engine = hybrid_engine
+        else:
+            self.hybrid_engine = HybridSearchEngine(vector_store=hybrid_engine)
 
     def reason_and_retrieve(self, complex_query: str, max_hops: int = 3) -> Dict[str, Any]:
         retrieval_history = []

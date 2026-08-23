@@ -1,5 +1,5 @@
 """Graph RAG (Bonus): Entity-Relation Knowledge Graph Traversal."""
-from typing import Dict, Any, List, Set
+from typing import Any, Dict, List, Set
 
 
 class PropertyPolicyKnowledgeGraph:

@@ -5,6 +5,7 @@ Directly adapts TA reference toolkit's deterministic_checks and reflect_and_refi
 
 import re
 from dataclasses import dataclass
+
 from langchain_core.language_models.chat_models import BaseChatModel
 
 
@@ -34,7 +35,7 @@ class ReflectionResult:
 def reflect_and_refine(goal: str, draft: str, llm: BaseChatModel) -> ReflectionResult:
     grounded = deterministic_checks(goal, draft)
     grounded_report = "\n".join(f"- {issue}" for issue in grounded) or "- Deterministic checks passed."
-    
+
     critique_response = llm.invoke([
         ("system", "You are a separate critic. Judge against the rubric; do not rewrite the draft."),
         ("human", f"""Goal: {goal}
@@ -47,12 +48,12 @@ Draft:
 
 List concrete issues. If there are none, respond exactly PASS."""),
     ], temperature=0.2)
-    
+
     critique = critique_response.content
     if not isinstance(critique, str) or not critique.strip():
         raise RuntimeError("Model returned an empty response")
     critique = critique.strip()
-    
+
     if critique.strip().upper() == "PASS" and not grounded:
         revised = draft
     else:
@@ -64,5 +65,5 @@ List concrete issues. If there are none, respond exactly PASS."""),
         if not isinstance(revised, str) or not revised.strip():
             raise RuntimeError("Model returned an empty response")
         revised = revised.strip()
-        
+
     return ReflectionResult(draft, critique, revised, grounded)

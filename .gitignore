@@ -15,12 +15,23 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 
 # IDE & OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Node & Frontend
+node_modules/
+dist/
+.pnpm-store/
+platform/dist/
+web/dist/
+.vite/
+platform/.vite/
 
 # Private / Internal planning & teammate instructions (Untracked)
 docs/*team_execution_plan*.md

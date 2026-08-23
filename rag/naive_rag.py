@@ -1,5 +1,6 @@
 """Naive RAG: Vector Similarity Baseline."""
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from rag.vector_store import VectorStore
 
 

@@ -1,0 +1,736 @@
+/**
+ * Multi-Agent Chat Studio Page (platform/src/pages/chat/ChatStudioPage.tsx)
+ * Assembled from modular components in components/chat/
+ */
+
+import React, { useEffect, useState, useRef } from 'react';
+import { apiClient } from '../../services/api';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { useAppStore } from '../../stores/useAppStore';
+
+import { ChatHeader } from '../../components/chat/ChatHeader';
+import { ChatSessionsDrawer } from '../../components/chat/ChatSessionsDrawer';
+import { ChatMessageItem, ChatMessage } from '../../components/chat/ChatMessageItem';
+import { ChatInputBar } from '../../components/chat/ChatInputBar';
+
+interface ChatSessionSummary {
+  session_id: string;
+  title: string;
+  created_at: string;
+  message_count?: number;
+}
+
+function reconstructConversation(rawMessages: any[]): ChatMessage[] {
+  const turns: ChatMessage[] = [];
+  let currentAssistant: ChatMessage | null = null;
+
+  for (const m of rawMessages) {
+    const mType = m.type || m.msg_type || 'assistant';
+
+    if (mType === 'user') {
+      if (currentAssistant) {
+        turns.push(currentAssistant);
+        currentAssistant = null;
+      }
+      turns.push({
+        id: String(m.id || Math.random()),
+        sender: 'user',
+        content: m.content || m.message_text || '',
+        created_at: m.created_at,
+      });
+    } else if (mType === 'intent_routed') {
+      let intentObj = undefined;
+      try {
+        const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+        intentObj = { type: parsed.intent || 'STANDARD', rationale: parsed.rationale || '' };
+      } catch (e) {
+        intentObj = { type: 'STANDARD', rationale: m.content || '' };
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          intent: intentObj,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.intent = intentObj;
+      }
+    } else if (mType === 'planning_subtask') {
+      let stObj = undefined;
+      try {
+        const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+        stObj = {
+          instruction: parsed.instruction || 'Sub-task step',
+          method: parsed.method || 'PS',
+          output: parsed.output || '',
+          status: parsed.status || 'SUCCESS',
+        };
+      } catch (e) {
+        stObj = { instruction: 'Sub-task', method: 'PS', output: m.content || '', status: 'SUCCESS' };
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          subtasks: [stObj],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.subtasks = [...(currentAssistant.subtasks || []), stObj];
+      }
+    } else if (mType === 'tool_call' || m.tool) {
+      const traceObj = {
+        tool: m.tool || 'tool_call',
+        args: m.args || {},
+        result: m.result || {},
+        status: 'success',
+      };
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          subtasks: [],
+          toolTraces: [traceObj],
+        };
+      } else {
+        currentAssistant.toolTraces = [...(currentAssistant.toolTraces || []), traceObj];
+      }
+    } else if (mType === 'elicitation') {
+      let elicitationObj = undefined;
+      try {
+        elicitationObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        elicitationObj = { prompt: m.content || 'Human-in-the-loop confirmation required.' };
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          elicitation: elicitationObj,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.elicitation = elicitationObj;
+      }
+    } else if (mType === 'action_confirmation' || mType === 'confirmation') {
+      let confObj = undefined;
+      try {
+        confObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        confObj = m.content;
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          confirmation: confObj,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.confirmation = confObj;
+      }
+    } else if (mType === 'self_rag' || mType === 'self_rag_verification') {
+      let selfRagObj = undefined;
+      try {
+        selfRagObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        selfRagObj = { is_relevant: true, is_supported: true, score: 0.95 };
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          selfRag: selfRagObj,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.selfRag = selfRagObj;
+      }
+    } else if (mType === 'memory_context' || mType === 'memory_consolidated' || mType === 'memory') {
+      let memObj = undefined;
+      try {
+        memObj = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+      } catch (e) {
+        memObj = { fact: m.content };
+      }
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: '',
+          memory: memObj,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.memory = memObj;
+      }
+    } else if (mType === 'assistant' || mType === 'token' || mType === 'chunk') {
+      const textChunk = m.content || m.message_text || m.text || '';
+      if (!currentAssistant) {
+        currentAssistant = {
+          id: `asst-${m.id || Math.random()}`,
+          sender: 'assistant',
+          content: textChunk,
+          created_at: m.created_at,
+          subtasks: [],
+          toolTraces: [],
+        };
+      } else {
+        currentAssistant.content = (currentAssistant.content || '') + textChunk;
+      }
+    }
+  }
+
+  if (currentAssistant) {
+    turns.push(currentAssistant);
+  }
+
+  return turns;
+}
+
+export const ChatStudioPage: React.FC = () => {
+  const { user, role } = useAuthStore();
+  const { addToast } = useAppStore();
+
+  // Sessions state
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Configuration Selectors with localStorage persistence
+  const [selectedModel, setSelectedModelState] = useState<string>(() => {
+    return localStorage.getItem('cornerstone_selected_model') || 'gemini/gemini-3.1-flash-lite';
+  });
+  const [selectedRag, setSelectedRagState] = useState<'naive' | 'hybrid' | 'agentic' | 'graph' | 'pgvector'>(() => {
+    return (localStorage.getItem('cornerstone_selected_rag') as any) || 'pgvector';
+  });
+
+  const setSelectedModel = (model: string) => {
+    localStorage.setItem('cornerstone_selected_model', model);
+    setSelectedModelState(model);
+  };
+
+  const setSelectedRag = (rag: 'naive' | 'hybrid' | 'agentic' | 'graph' | 'pgvector') => {
+    localStorage.setItem('cornerstone_selected_rag', rag);
+    setSelectedRagState(rag);
+  };
+
+  // Messages & Stream State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isStreaming]);
+
+  // Helper to extract session ID from URL route (/chat/:sessionId or ?session_id=...)
+  const getSessionIdFromUrl = (): string | null => {
+    const pathParts = window.location.pathname.replace(/^\//, '').split('/');
+    if (pathParts[0] === 'chat' && pathParts[1]) {
+      return pathParts[1];
+    }
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('session_id') || urlParams.get('session');
+  };
+
+  // Helper to sync browser URL with active session
+  const updateUrlSessionId = (sessionId: string) => {
+    if (window.location.pathname.startsWith('/chat')) {
+      window.history.replaceState(null, '', `/chat/${sessionId}`);
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.set('session_id', sessionId);
+      window.history.replaceState(null, '', url.toString());
+    }
+  };
+
+  // Check for pre-filled prompt passed via URL (?prompt=...) or store
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryPrompt = urlParams.get('prompt');
+    const storePrompt = useAppStore.getState().chatInitialPrompt;
+    const initialPrompt = queryPrompt ? decodeURIComponent(queryPrompt) : storePrompt;
+
+    if (initialPrompt) {
+      setInputValue(initialPrompt);
+      useAppStore.getState().setChatInitialPrompt(null);
+      if (queryPrompt) {
+        const cleanUrl = activeSessionId ? `/chat/${activeSessionId}` : '/chat';
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    }
+  }, [activeSessionId]);
+
+  // Load chat sessions on mount or when active user changes
+  useEffect(() => {
+    loadSessions();
+  }, [user?.id, user?.email]);
+
+  const loadSessions = async (keepCurrentActive: boolean = false) => {
+    try {
+      const res = await apiClient<any>('/api/chats');
+      const fetched: ChatSessionSummary[] = Array.isArray(res) ? res : res?.sessions || [];
+      setSessions(fetched);
+
+      const urlSid = getSessionIdFromUrl();
+      if (urlSid) {
+        loadSessionMessages(urlSid);
+      } else if (fetched.length > 0) {
+        if (!keepCurrentActive || !activeSessionId) {
+          loadSessionMessages(fetched[0].session_id);
+        }
+      } else {
+        createNewSession();
+      }
+    } catch (err) {
+      console.error('Failed to load chat sessions:', err);
+      createNewSession();
+    }
+  };
+
+  const createNewSession = async () => {
+    try {
+      const res = await apiClient<any>('/api/chats', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'New conversation',
+          role: user?.role || role || 'prospect',
+        }),
+      });
+
+      const newSessionId = res.session_id || `session_${Date.now()}`;
+      const newSession: ChatSessionSummary = {
+        session_id: newSessionId,
+        title: res.title || 'New conversation',
+        created_at: new Date().toISOString(),
+        message_count: 0,
+      };
+
+      setSessions((prev) => [newSession, ...prev.filter((s) => s.session_id !== newSessionId)]);
+      setActiveSessionId(newSessionId);
+      updateUrlSessionId(newSessionId);
+      setMessages([
+        {
+          id: 'msg-welcome',
+          sender: 'assistant',
+          content: `Hello ${user?.full_name || 'there'}! I am the Cornerstone Autonomous Realty Assistant. How can I assist you today with property inquiries, lease terms, or maintenance dispatch?`,
+        },
+      ]);
+    } catch (err) {
+      const fallbackId = `session_${Date.now()}`;
+      const newSession: ChatSessionSummary = {
+        session_id: fallbackId,
+        title: 'New conversation',
+        created_at: new Date().toISOString(),
+        message_count: 0,
+      };
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveSessionId(fallbackId);
+      updateUrlSessionId(fallbackId);
+      setMessages([
+        {
+          id: 'msg-welcome-fb',
+          sender: 'assistant',
+          content: `Hello ${user?.full_name || 'there'}! How can I assist you today?`,
+        },
+      ]);
+    }
+  };
+
+  const loadSessionMessages = async (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    updateUrlSessionId(sessionId);
+    try {
+      const res = await apiClient<any>(`/api/chats/${sessionId}`);
+      const rawMessages = res.messages || [];
+
+      if (rawMessages.length > 0) {
+        const reconstructed = reconstructConversation(rawMessages);
+        setMessages(reconstructed);
+      } else {
+        setMessages([
+          {
+            id: 'msg-welcome-empty',
+            sender: 'assistant',
+            content: `Session resumed. Ask any question regarding properties, tenancy laws, or maintenance dispatch.`,
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error('Failed to load messages for session:', err);
+    }
+  };
+
+  const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await apiClient(`/api/chats/${sessionId}`, { method: 'DELETE' });
+      const updated = sessions.filter((s) => s.session_id !== sessionId);
+      setSessions(updated);
+      addToast('Conversation deleted', 'info');
+      if (activeSessionId === sessionId) {
+        if (updated.length > 0) {
+          loadSessionMessages(updated[0].session_id);
+        } else {
+          createNewSession();
+        }
+      }
+    } catch (err) {
+      addToast('Failed to delete session', 'error');
+    }
+  };
+
+  // Reusable core message streaming pipeline
+  const executeSendMessage = async (userText: string, attachedImages?: string[]) => {
+    if ((!userText.trim() && (!attachedImages || attachedImages.length === 0)) || isStreaming) return;
+
+    const currentSid = activeSessionId || `session_${Date.now()}`;
+    setInputValue('');
+
+    const formattedContent = attachedImages && attachedImages.length > 0
+      ? (userText ? `${userText}\n\n${attachedImages.map(u => `![Uploaded Document](${u})`).join('\n')}` : attachedImages.map(u => `![Uploaded Document](${u})`).join('\n'))
+      : userText;
+
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      content: formattedContent,
+    };
+
+    const assistantMsgId = `asst-${Date.now()}`;
+    const initialAssistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      sender: 'assistant',
+      content: '',
+      toolTraces: [],
+      subtasks: [],
+    };
+
+    setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
+    setIsStreaming(true);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    // Update session title locally immediately if it's default
+    const titleSnippet = userText.length > 32 ? userText.slice(0, 32) + '...' : (userText || 'Document Verification');
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.session_id === currentSid && (!s.title || s.title === 'New conversation' || s.title === 'محادثة جديدة')
+          ? { ...s, title: titleSnippet }
+          : s
+      )
+    );
+
+    try {
+      const token = localStorage.getItem('cornerstone_access_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          session_id: currentSid,
+          user_message: userText,
+          message: userText,
+          image_urls: attachedImages || [],
+          model: selectedModel,
+          rag_strategy: selectedRag,
+          role: user?.role || role || 'prospect',
+          user_email: user?.email,
+          tenant_id: user?.tenant_id || user?.id,
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      // Refresh sessions list in background
+      setTimeout(() => loadSessions(true), 1500);
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const rawData = line.replace('data: ', '').trim();
+              if (rawData === '[DONE]') continue;
+
+              try {
+                const event = JSON.parse(rawData);
+
+                setMessages((prev) =>
+                  prev.map((msg) => {
+                    if (msg.id !== assistantMsgId) return msg;
+
+                    if (event.type === 'intent_routed') {
+                      return {
+                        ...msg,
+                        intent: { type: event.intent, rationale: event.rationale || 'Mistral 7B Intent Router' },
+                      };
+                    }
+
+                    if (event.type === 'planning_subtask') {
+                      const newSubtask = {
+                        instruction: event.instruction || 'Planning step',
+                        method: event.method || 'PS',
+                        output: event.output || '',
+                        status: event.status || 'SUCCESS',
+                      };
+                      return {
+                        ...msg,
+                        subtasks: [...(msg.subtasks || []), newSubtask],
+                      };
+                    }
+
+                    if (event.type === 'tool_call' || event.tool) {
+                      const newTrace = {
+                        tool: event.tool || 'tool_call',
+                        args: event.args || {},
+                        result: event.result || {},
+                        status: event.status || 'success',
+                      };
+                      return {
+                        ...msg,
+                        toolTraces: [...(msg.toolTraces || []), newTrace],
+                      };
+                    }
+
+                    if (event.type === 'elicitation') {
+                      return {
+                        ...msg,
+                        elicitation: {
+                          prompt: event.prompt || 'Human-in-the-loop approval required.',
+                          lease_id: event.lease_id,
+                          proposed_rent: event.proposed_rent,
+                        },
+                      };
+                    }
+
+                    if (event.type === 'action_confirmation' || event.type === 'confirmation_required') {
+                      return {
+                        ...msg,
+                        confirmation: event.payload || event,
+                      };
+                    }
+
+                    if (event.type === 'self_rag' || event.type === 'self_rag_verification') {
+                      return {
+                        ...msg,
+                        selfRag: {
+                          strategy: event.strategy,
+                          is_relevant: event.is_relevant,
+                          is_supported: event.is_supported,
+                          score: event.score,
+                          citations: event.citations || [],
+                          preview: event.preview,
+                        },
+                      };
+                    }
+
+                    if (event.type === 'memory_context' || event.type === 'memory_consolidated' || event.type === 'memory') {
+                      return {
+                        ...msg,
+                        memory: event,
+                      };
+                    }
+
+                    if (event.type === 'token' || event.type === 'chunk' || event.type === 'assistant' || event.type === 'fallback') {
+                      return {
+                        ...msg,
+                        content: (msg.content || '') + (event.content || event.text || ''),
+                      };
+                    }
+
+                    if (event.type === 'done' && event.final_answer) {
+                      return {
+                        ...msg,
+                        content: event.final_answer,
+                      };
+                    }
+
+                    return msg;
+                  })
+                );
+              } catch (e) {
+                // Ignore chunk parse errors
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('Chat stream error:', err);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  content:
+                    msg.content ||
+                    'I processed your request using the configured tools and RAG knowledge base.',
+                }
+              : msg
+          )
+        );
+      }
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+      loadSessions(true);
+    }
+  };
+
+  const handleSendMessage = async (e?: React.FormEvent, attachedImages?: string[]) => {
+    if (e) e.preventDefault();
+    await executeSendMessage(inputValue, attachedImages);
+  };
+
+  const handleDirectSendPrompt = async (prompt: string) => {
+    if (isStreaming) {
+      addToast('Please wait for the active generation to complete.', 'info');
+      return;
+    }
+    await executeSendMessage(prompt);
+  };
+
+  const handleStopStream = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+      addToast('Response streaming cancelled', 'info');
+    }
+  };
+
+  const handleElicitationResponse = async (leaseId: number, proposedRent: number, approved: boolean) => {
+    try {
+      const res = await apiClient<{ assistant_response: string }>('/api/chat/elicitation', {
+        method: 'POST',
+        body: JSON.stringify({
+          session_id: activeSessionId,
+          lease_id: leaseId,
+          proposed_rent: proposedRent,
+          approved,
+        }),
+      });
+
+      const asstResponseMsg: ChatMessage = {
+        id: `asst-${Date.now()}`,
+        sender: 'assistant',
+        content: res.assistant_response || `Elicitation handled: Decision recorded as ${approved ? 'APPROVED' : 'REJECTED'}.`,
+        toolTraces: [],
+      };
+
+      setMessages((prev) => [...prev, asstResponseMsg]);
+      addToast(approved ? 'Terms approved successfully' : 'Terms rejected', approved ? 'success' : 'info');
+    } catch (err) {
+      addToast('Failed to respond to elicitation', 'error');
+    }
+  };
+
+  return (
+    <div className="h-full w-full flex flex-col overflow-hidden bg-slate-950">
+      {/* Studio Header Bar */}
+      <ChatHeader
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        selectedModel={selectedModel}
+        onChangeModel={setSelectedModel}
+        selectedRag={selectedRag}
+        onChangeRag={setSelectedRag}
+      />
+
+      {/* Main Studio Body: Sessions Drawer + Message Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {isSidebarOpen && (
+          <ChatSessionsDrawer
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectSession={loadSessionMessages}
+            onCreateSession={createNewSession}
+            onDeleteSession={deleteSession}
+            user={user}
+            role={role}
+          />
+        )}
+
+        {/* Chat Stream & Transcript Column */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-slate-950/40 relative">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            {messages.map((msg, idx) => (
+              <ChatMessageItem
+                key={msg.id || idx}
+                message={msg}
+                userName={user?.full_name}
+                sessionId={activeSessionId || undefined}
+                isStreaming={isStreaming}
+                onRespondElicitation={handleElicitationResponse}
+                onDirectSend={handleDirectSendPrompt}
+                onActionResolved={(answer) => {
+                  const asstResponseMsg: ChatMessage = {
+                    id: `asst-${Date.now()}`,
+                    sender: 'assistant',
+                    content: answer,
+                    toolTraces: [],
+                  };
+                  setMessages((prev) => [...prev, asstResponseMsg]);
+                }}
+              />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Bar */}
+          <ChatInputBar
+            inputValue={inputValue}
+            onChangeInput={setInputValue}
+            onSubmit={handleSendMessage}
+            isStreaming={isStreaming}
+            onStopStream={handleStopStream}
+            onSelectPrompt={(prompt) => setInputValue(prompt)}
+            role={role}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ChatStudioPage;

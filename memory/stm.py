@@ -6,6 +6,7 @@ Pruning the message transcript NEVER destroys or alters the scratchpad.
 """
 
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -65,7 +66,7 @@ class ShortTermMemory:
         plan_str = self.scratchpad.get("current_plan") or "No active plan"
         subgoal_str = self.scratchpad.get("active_subgoal") or "None"
         findings_str = "; ".join(self.scratchpad.get("intermediate_findings", [])) or "None"
-        
+
         return (
             f"{base_prompt}\n\n"
             f"=== AGENT WORKING SCRATCHPAD ===\n"

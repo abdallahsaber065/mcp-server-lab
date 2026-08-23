@@ -10,7 +10,8 @@ Visible consequence: Rejects unsupported claims, triggers query rewrite or fallb
 
 import re
 from typing import Any, Dict, List, Literal, Optional, Tuple
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CritiqueToken(BaseModel):
@@ -57,17 +58,17 @@ class SelfRAGVerifier:
         Verifies whether the generated answer is strictly grounded in retrieved evidence or hallucinated.
         """
         combined_evidence = " ".join(evidence).lower()
-        
+
         # Strip HTML tags and normalize text
         clean_ans = re.sub(r'<[^>]+>', ' ', generated_answer).lower()
-        
+
         # Check for explicit hallucination of non-existent sections or penalty numbers
         has_hallucinated_statute = (
             ("section 99" in clean_ans and "section 99" not in combined_evidence) or
             ("furniture" in clean_ans and "furniture" not in combined_evidence) or
             ("6 months" in clean_ans and "6 months" not in combined_evidence)
         )
-        
+
         if has_hallucinated_statute:
             return CritiqueToken(
                 is_relevant="relevant",

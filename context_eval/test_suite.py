@@ -47,7 +47,7 @@ def generate_long_context_transcript(variation_id: int = 1) -> Tuple[List[Dict[s
         )
 
         messages.append({
-            "role": "assistant", 
+            "role": "assistant",
             "content": f"Calling tool {tool_name} to inspect available inventory across Cairo and Alexandria."
         })
         messages.append({
@@ -58,7 +58,7 @@ def generate_long_context_transcript(variation_id: int = 1) -> Tuple[List[Dict[s
 
     # Turn 39 & 40: The final inquiry testing memory recall
     messages.append({
-        "role": "user", 
+        "role": "user",
         "content": "Before we finalize the lease agreement and maintenance schedule, are there any special allergies, concessions, or waivers recorded on this file?"
     })
 

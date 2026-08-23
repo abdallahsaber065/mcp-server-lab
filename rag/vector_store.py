@@ -4,9 +4,9 @@ Provides an ANN vector index (HNSW / Cosine Similarity), metadata payload store,
 and a metadata index enabling pre-search filtering (by city, doc_type, section_id, role).
 """
 
-from typing import Any, Callable, Dict, List, Optional
 import math
 import re
+from typing import Any, Callable, Dict, List, Optional
 
 
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:

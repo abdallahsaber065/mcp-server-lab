@@ -4,8 +4,11 @@ Replaces TA reference toolkit's randomized betavariate evaluator with real DB & 
 Returns EnvironmentFeedback(success: bool, score: float, details: list[str]).
 """
 
-import sqlite3
 from pathlib import Path
+
+from db.models import MaintenanceRequest
+from db.session import get_sync_db
+
 from .models import EnvironmentFeedback
 
 
@@ -22,16 +25,10 @@ class Environment:
 
     def _check_db_active_emergencies(self) -> int:
         try:
-            from mcp_server.db_helpers import get_db_connection
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT count(*) FROM maintenance_requests WHERE priority = 'urgent'")
-            row = cursor.fetchone()
-            count = row[0] if row else 0
-            conn.close()
-            return count
-        except Exception:
-            return 0
+            with next(get_sync_db()) as session:
+                return session.query(MaintenanceRequest).filter(
+                    MaintenanceRequest.priority.in_(["urgent", "emergency"])
+                ).count()
         except Exception:
             return 0
 

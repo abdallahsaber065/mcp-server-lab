@@ -1,0 +1,30 @@
+[
+  {
+    "doc_id": "doc-law-4-1996",
+    "title": "Egyptian Law No. 4 of 1996 (Civil Lease Framework)",
+    "category": "statute",
+    "content": "Under Egyptian Law No. 4 of 1996, lease agreements for non-residential and residential premises concluded after January 31, 1996, are governed exclusively by the provisions of the Egyptian Civil Code. Contractual parties have total freedom to determine lease durations, rental escalation percentages, and terms of termination. Notice of default for non-payment requires a statutory cure period of 15 calendar days before judicial eviction proceedings may be initiated.",
+    "metadata_json": "{\"jurisdiction\": \"Egypt\", \"statute_number\": \"Law 4/1996\", \"topics\": [\"lease_duration\", \"statutory_cure\", \"eviction_terms\"]}"
+  },
+  {
+    "doc_id": "doc-cornerstone-master-policy",
+    "title": "Cornerstone Realty Master Commercial Leasing Policy",
+    "category": "policy",
+    "content": "Cornerstone Realty Group Policy Statement: Property Managers are authorized to grant rental rate discounts of up to 15.0% below the published base tariff without prior committee approval. Any proposal granting a discount exceeding 15.0%, or any agreement where the monthly gross rent exceeds 40,000 EGP, strictly mandates executive approval and written authorization from the Executive Board or Chief Commercial Officer.",
+    "metadata_json": "{\"version\": \"2026.2\", \"max_manager_discount\": 15.0, \"executive_threshold\": 40000.0, \"topics\": [\"discounts\", \"approvals\", \"commercial\"]}"
+  },
+  {
+    "doc_id": "doc-heritage-renovation-cairo",
+    "title": "Cairo Governorate Heritage Building Renovation & Structural Bylaws",
+    "category": "engineering",
+    "content": "For properties designated under Heritage Category B (including Zamalek, Garden City, and Downtown Cairo historic districts), any structural renovation involving load-bearing columns, external riser replacements, or facade modifications exceeding 100,000 EGP requires: (1) Preliminary municipal engineering review from Cairo Governorate District Office, (2) Soil stability and vibration mitigation plan, (3) Formal sign-off from a licensed Chief Structural Engineer registered with the Egyptian Engineering Syndicate.",
+    "metadata_json": "{\"district\": [\"Zamalek\", \"Garden City\", \"Downtown\"], \"cost_threshold\": 100000.0, \"topics\": [\"permits\", \"structural_repair\", \"heritage\"]}"
+  },
+  {
+    "doc_id": "doc-dispute-mediation-protocol",
+    "title": "Cornerstone Delinquency Remediation & Voluntary Settlement Protocol",
+    "category": "procedure",
+    "content": "When a tenant incurs rental arrears exceeding 30 calendar days, the Property Manager must initiate formal mediation prior to litigation. Approved settlement terms may include: (A) 50% upfront payment of arrears with remaining balance spread over 3 monthly installments, (B) Partial security deposit offset combined with an accelerated lease surrender, or (C) Transition to a shorter bi-weekly payment schedule. Any restructuring agreement requires sign-off by Cornerstone Legal Counsel.",
+    "metadata_json": "{\"stage\": \"arrears_remediation\", \"settlement_options\": 3, \"topics\": [\"mediation\", \"arrears\", \"restructuring\"]}"
+  }
+]

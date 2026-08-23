@@ -1,10 +1,16 @@
 import json
 import logging
 import time
-from typing import Dict, Any, List, Optional, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, List, Optional, cast
+
 import litellm
 
 logger = logging.getLogger("mcp_llm_engine")
+
+# Lazy import to avoid circular deps at module load time
+def _get_hitl_registry():
+    from web.services.hitl import hitl_registry
+    return hitl_registry
 
 AVAILABLE_MODELS = [
     # Google Gemini Flash & Flash-Lite Series
@@ -48,7 +54,7 @@ Set intent to "STANDARD" for:
 Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale": "<1-sentence reason>"}"""
 
         try:
-            resp = litellm.completion(
+            resp: Any = litellm.completion(
                 model="mistral/open-mistral-7b",
                 messages=[
                     {"role": "system", "content": router_prompt},
@@ -81,7 +87,7 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
     ) -> Dict[str, Any]:
         """Runs non-streaming multi-turn reasoning loop executing MCP tools via LiteLLM."""
         target_model = model if model in AVAILABLE_MODELS else self.default_model
-        
+
         raw_tools = mcp_server_instance.list_tools(role=role)
         formatted_tools = []
         for t in raw_tools:
@@ -102,7 +108,7 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
 
         for round_idx in range(max_rounds):
             llm_calls_count += 1
-            
+
             try:
                 kwargs = {
                     "model": target_model,
@@ -112,7 +118,7 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
                     kwargs["tools"] = formatted_tools
                     kwargs["tool_choice"] = "auto"
 
-                response = await litellm.acompletion(**kwargs)
+                response: Any = await litellm.acompletion(**kwargs)
             except Exception as e:
                 logger.warning(f"LiteLLM call failed for model {target_model}: {e}")
                 return {
@@ -125,10 +131,11 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
 
             choice = response.choices[0]
             msg = choice.message
-            
+
             tool_calls = getattr(msg, "tool_calls", None)
             if tool_calls:
-                messages.append(msg)
+                msg_content = getattr(msg, "content", "") or ""
+                messages.append({"role": "assistant", "content": msg_content})
                 for tc in tool_calls:
                     tool_name = tc.function.name
                     try:
@@ -138,31 +145,18 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
 
                     tool_result = mcp_server_instance.call_tool(tool_name, args)
                     tool_calls_trace.append({
-                        "round": round_idx + 1,
                         "tool": tool_name,
                         "args": args,
                         "result": tool_result
                     })
 
-                    if tool_result.get("status") == "elicitation_required":
-                        return {
-                            "status": "elicitation_required",
-                            "elicitation_payload": tool_result["elicitation_payload"],
-                            "tool_calls": tool_calls_trace,
-                            "llm_calls": llm_calls_count,
-                            "model": target_model,
-                            "messages": messages
-                        }
-
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": tc.id,
                         "name": tool_name,
                         "content": json.dumps(tool_result, ensure_ascii=False)
                     })
             else:
-                final_text = msg.content or "Completed operation."
-                messages.append({"role": "assistant", "content": final_text})
+                final_text = getattr(msg, "content", "") or "Task completed."
                 return {
                     "status": "success",
                     "final_answer": final_text,
@@ -173,7 +167,7 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
 
         return {
             "status": "max_rounds_reached",
-            "final_answer": "Max reasoning steps reached without final answer.",
+            "final_answer": "Reached maximum reasoning steps.",
             "tool_calls": tool_calls_trace,
             "llm_calls": llm_calls_count,
             "model": target_model
@@ -187,11 +181,39 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
         conversation_history: List[Dict[str, Any]],
         model: Optional[str] = None,
         role: str = "property_manager",
-        max_rounds: int = 6
+        max_rounds: int = 6,
+        image_urls: Optional[List[str]] = None,
+        image_url: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
-        """Streams agent reasoning steps, tool calls, and text tokens via SSE formatted data events."""
+        all_images = image_urls or ([image_url] if image_url else [])
+        async for item in self.stream_agent_loop(
+            mcp_server_instance=mcp_server_instance,
+            user_message=user_message,
+            system_prompt=system_prompt,
+            conversation_history=conversation_history,
+            model=model,
+            role=role,
+            max_rounds=max_rounds,
+            image_urls=all_images
+        ):
+            yield item
+
+    async def stream_agent_loop(
+        self,
+        mcp_server_instance: Any,
+        user_message: str,
+        system_prompt: str,
+        conversation_history: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        role: str = "property_manager",
+        max_rounds: int = 6,
+        image_urls: Optional[List[str]] = None,
+        image_url: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
+        """Async generator streaming Server-Sent Events (SSE) for UI real-time rendering."""
         target_model = model if model in AVAILABLE_MODELS else self.default_model
-        
+        all_images = image_urls or ([image_url] if image_url else [])
+
         raw_tools = mcp_server_instance.list_tools(role=role)
         formatted_tools = []
         for t in raw_tools:
@@ -205,29 +227,35 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
             })
 
         messages = [{"role": "system", "content": system_prompt}] + conversation_history
-        messages.append({"role": "user", "content": user_message})
+        if all_images:
+            user_content = [{"type": "text", "text": user_message}]
+            for img in all_images:
+                user_content.append({"type": "image_url", "image_url": {"url": img}})
+            messages.append({"role": "user", "content": user_content})
+        else:
+            messages.append({"role": "user", "content": user_message})
 
         for round_idx in range(max_rounds):
             try:
                 kwargs = {
                     "model": target_model,
                     "messages": messages,
-                    "stream": True
+                    "stream": True,
                 }
                 if formatted_tools:
                     kwargs["tools"] = formatted_tools
                     kwargs["tool_choice"] = "auto"
 
-                response_stream = await litellm.acompletion(**kwargs)
-                
-                full_text = ""
-                tool_calls_accumulator = {}
+                response_stream: Any = await litellm.acompletion(**kwargs)
 
-                async for chunk in response_stream:
+                full_text = ""
+                tool_calls_accumulator: Dict[int, Any] = {}
+
+                async for chunk in cast(Any, response_stream):
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
-                    
+
                     content_chunk = getattr(delta, "content", None)
                     if content_chunk:
                         full_text += content_chunk
@@ -244,7 +272,7 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
                                     "name": "",
                                     "arguments": ""
                                 }
-                            
+
                             fn = getattr(tc, "function", None)
                             if fn:
                                 fn_name = getattr(fn, "name", None)
@@ -277,8 +305,19 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
                         except Exception:
                             args = {}
 
+                        # HITL interception — delegates to HITLRegistry (Open/Closed)
+                        conf_payload = _get_hitl_registry().check(tool_name, args)
+                        if conf_payload is not None:
+                            conf_event = json.dumps({
+                                "type": "action_confirmation",
+                                "payload": conf_payload
+                            }, ensure_ascii=False)
+                            yield f"data: {conf_event}\n\n"
+                            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                            return
+
                         tool_result = mcp_server_instance.call_tool(tool_name, args)
-                        
+
                         tool_event = json.dumps({
                             "type": "tool_call",
                             "tool": tool_name,
@@ -321,8 +360,9 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
 
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, AIMessage
-from langchain_core.outputs import ChatResult, ChatGeneration
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+
 
 class StructuredOutputRunner:
     def __init__(self, llm: Any, schema: Any):
@@ -374,7 +414,7 @@ class LiteLLMChatWrapper(BaseChatModel):
             formatted.append({"role": role, "content": content})
 
         try:
-            resp = litellm.completion(model=self.model_name, messages=formatted, **kwargs)
+            resp: Any = litellm.completion(model=self.model_name, messages=formatted, **kwargs)
             content = resp.choices[0].message.content or ""
         except Exception as e:
             logger.warning(f"LiteLLMChatWrapper call failed for {self.model_name}: {e}")

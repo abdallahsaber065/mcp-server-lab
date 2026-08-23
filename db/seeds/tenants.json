@@ -1,0 +1,110 @@
+[
+  {
+    "tenant_id": 1,
+    "full_name": "Dr. Tarek El-Mahdy",
+    "email": "tarek.mahdy@cairomed.org",
+    "phone": "+20 100 123 4567",
+    "role": "tenant",
+    "assigned_unit_id": 101,
+    "emergency_contact": "Mona El-Mahdy (+20 100 987 6543)"
+  },
+  {
+    "tenant_id": 2,
+    "full_name": "Ambassador Jean-Luc Picard",
+    "email": "jeanluc.picard@diplomatie.fr",
+    "phone": "+20 102 333 4455",
+    "role": "tenant",
+    "assigned_unit_id": 103,
+    "emergency_contact": "French Embassy Security (+20 2 2790 3000)"
+  },
+  {
+    "tenant_id": 3,
+    "full_name": "Laila Soliman",
+    "email": "laila.soliman@artcairo.com",
+    "phone": "+20 111 888 9900",
+    "role": "tenant",
+    "assigned_unit_id": 201,
+    "emergency_contact": "Nader Soliman (+20 111 222 3344)"
+  },
+  {
+    "tenant_id": 4,
+    "full_name": "Apex Middle East Financial Holding",
+    "email": "corporate.leasing@apexfincorp.eg",
+    "phone": "+20 2 2614 8800",
+    "role": "tenant",
+    "assigned_unit_id": 302,
+    "emergency_contact": "Legal Counsel Dept (+20 2 2614 8801)"
+  },
+  {
+    "tenant_id": 5,
+    "full_name": "Cinnabon Nile Delta Franchise",
+    "email": "franchise.mgr@cinnabon-eg.com",
+    "phone": "+20 122 555 6677",
+    "role": "tenant",
+    "assigned_unit_id": 402,
+    "emergency_contact": "Regional Operations (+20 2 3300 4400)"
+  },
+  {
+    "tenant_id": 6,
+    "full_name": "Eng. Karim Mostafa",
+    "email": "karim.mostafa@techstart.io",
+    "phone": "+20 109 444 5566",
+    "role": "tenant",
+    "assigned_unit_id": 501,
+    "emergency_contact": "Dina Mostafa (+20 109 777 8899)"
+  },
+  {
+    "tenant_id": 7,
+    "full_name": "Captain Sherif Zaher",
+    "email": "sherif.zaher@maritime.eg",
+    "phone": "+20 114 666 7788",
+    "role": "tenant",
+    "assigned_unit_id": 601,
+    "emergency_contact": "Hoda Zaher (+20 114 111 2233)"
+  },
+  {
+    "tenant_id": 8,
+    "full_name": "Abdallah Saber (Property Manager)",
+    "email": "abdallahsaber065@gmail.com",
+    "phone": "+20 100 000 0001",
+    "role": "property_manager",
+    "assigned_unit_id": null,
+    "emergency_contact": "Operations HQ (+20 2 2790 0000)"
+  },
+  {
+    "tenant_id": 9,
+    "full_name": "Cornerstone Executive Board",
+    "email": "admin@cornerstonerealty.eg",
+    "phone": "+20 2 2888 9999",
+    "role": "executive_admin",
+    "assigned_unit_id": null,
+    "emergency_contact": "Executive Secretariat (+20 2 2888 9990)"
+  },
+  {
+    "tenant_id": 10,
+    "full_name": "Farida Shaker",
+    "email": "farida.shaker@gmail.com",
+    "phone": "+20 101 222 9911",
+    "role": "prospect",
+    "assigned_unit_id": null,
+    "emergency_contact": "Sameh Shaker (+20 101 555 8822)"
+  },
+  {
+    "tenant_id": 11,
+    "full_name": "Youssef Aly",
+    "email": "youssef.aly@gmail.com",
+    "phone": "+20 120 777 4433",
+    "role": "prospect",
+    "assigned_unit_id": null,
+    "emergency_contact": "Mariam Aly (+20 120 333 1122)"
+  },
+  {
+    "tenant_id": 12,
+    "full_name": "Hassan El-Wakeel (Portfolio Landlord)",
+    "email": "hassan.elwakeel@realtyinvest.eg",
+    "phone": "+20 100 555 1100",
+    "role": "landlord",
+    "assigned_unit_id": null,
+    "emergency_contact": "Wealth Management Office (+20 2 2450 7700)"
+  }
+]

@@ -5,15 +5,22 @@ and Retrieval Architecture benchmarks.
 Outputs structured metrics to benchmarks/benchmark_results.json.
 """
 
+import json
 import os
 import sys
-import json
 import time
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from context_eval.run_context_benchmarks import run_all_context_benchmarks
 from mcp_server.server import CornerstoneMCPServer
+from rag.agentic_rag import AgenticRAGRouter
+from rag.graph_rag import PropertyPolicyKnowledgeGraph
+from rag.hybrid_rag import HybridSearchEngine
+from rag.naive_rag import naive_rag_search
+from rag.pipeline import build_and_seed_vector_store
+from retrieval_eval.test_questions import TEST_QUESTIONS
 
 
 def run_mcp_performance_benchmarks(trials: int = 5) -> List[Dict[str, Any]]:
@@ -43,8 +50,9 @@ def run_mcp_performance_benchmarks(trials: int = 5) -> List[Dict[str, Any]]:
             t0 = time.perf_counter()
             res = op_func()
             t1 = time.perf_counter()
-            latencies.append((t1 - t0) * 1000.0)
-            statuses.append(res.get("status", "success") if isinstance(res, dict) else "success")
+            latencies.append((t1 - t0) * 1000)
+            status = res.get("status", "ok") if isinstance(res, dict) else "ok"
+            statuses.append(status)
 
         avg_lat = sum(latencies) / len(latencies)
         entry = {
@@ -63,13 +71,6 @@ def run_mcp_performance_benchmarks(trials: int = 5) -> List[Dict[str, Any]]:
 
 def run_retrieval_architecture_benchmarks() -> List[Dict[str, Any]]:
     """Benchmark all 4 RAG architectures against 12 domain test questions."""
-    from rag.pipeline import build_and_seed_vector_store
-    from rag.naive_rag import naive_rag_search
-    from rag.hybrid_rag import HybridSearchEngine
-    from rag.agentic_rag import AgenticRAGRouter
-    from rag.graph_rag import PropertyPolicyKnowledgeGraph
-    from retrieval_eval.test_questions import TEST_QUESTIONS
-
     vdb = build_and_seed_vector_store()
     hybrid = HybridSearchEngine(vdb)
     agentic = AgenticRAGRouter(hybrid)
@@ -116,7 +117,6 @@ def run_retrieval_architecture_benchmarks() -> List[Dict[str, Any]]:
 
 def run_context_management_benchmarks() -> List[Dict[str, Any]]:
     """Run Ahmed's context pruning strategy benchmarks."""
-    from context_eval.run_context_benchmarks import run_all_context_benchmarks
     return run_all_context_benchmarks()
 
 

@@ -1,0 +1,84 @@
+# ==============================================================================
+# Cornerstone Realty Group — Caddy Reverse Proxy & Production Configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Production Domain Setup (Replace example.com with your live domain)
+# ------------------------------------------------------------------------------
+# realty.example.com {
+#     # Enable HTTPS & TLS certificates automatically
+#     tls admin@cornerstonerealty.eg
+#
+#     # Compression
+#     encode zstd gzip
+#
+#     # Root directory for built React 18/19 SPA
+#     root * /var/www/mcp-server-lab/web/dist
+#
+#     # Proxy all backend API & MCP endpoints to FastAPI
+#     handle /api/* {
+#         reverse_proxy 127.0.0.1:8000 {
+#             header_up Host {host}
+#             header_up X-Real-IP {remote_host}
+#             header_up X-Forwarded-For {remote_host}
+#             header_up X-Forwarded-Proto {scheme}
+#             # Disable buffering for real-time SSE streaming (/api/chat/stream)
+#             flush_interval -1
+#         }
+#     }
+#
+#     handle /mcp/* {
+#         reverse_proxy 127.0.0.1:8000 {
+#             header_up Host {host}
+#             header_up X-Real-IP {remote_host}
+#             header_up X-Forwarded-For {remote_host}
+#             header_up X-Forwarded-Proto {scheme}
+#             flush_interval -1
+#         }
+#     }
+#
+#     # Static Assets Caching
+#     handle /assets/* {
+#         header Cache-Control "public, max-age=31536000, immutable"
+#         file_server
+#     }
+#
+#     # HTML5 History Mode SPA Routing (Fallback all non-file routes to index.html)
+#     handle {
+#         try_files {path} /index.html
+#         file_server
+#     }
+# }
+
+# ------------------------------------------------------------------------------
+# 2. Local Caddy Gateway Setup (Optional Local Testing on port 80 / 443)
+# ------------------------------------------------------------------------------
+:80 {
+    encode zstd gzip
+
+    # Root directory pointing to local built frontend
+    root * ./web/dist
+
+    # Proxy backend API endpoints
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8000 {
+            flush_interval -1
+        }
+    }
+
+    handle /mcp/* {
+        reverse_proxy 127.0.0.1:8000 {
+            flush_interval -1
+        }
+    }
+
+    # Static Assets & SPA Fallback
+    handle /assets/* {
+        file_server
+    }
+
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}

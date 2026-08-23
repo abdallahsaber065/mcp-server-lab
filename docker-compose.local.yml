@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: cornerstone_postgres_local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cornerstone
+      POSTGRES_PASSWORD: cornerstone_secret_pass
+      POSTGRES_DB: cornerstone_realty
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cornerstone -d cornerstone_realty"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cornerstone_redis_local
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass cornerstone_redis_pass
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata_local:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "cornerstone_redis_pass", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata_local:
+  redisdata_local:

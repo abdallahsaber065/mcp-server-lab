@@ -5,23 +5,22 @@ self-correction (Self-Refine, Reflexion), and grounded environment feedback.
 Reuses existing mcp_server/ and db/ without touching Week 1-3 memory/RAG code paths.
 """
 
-from typing import Dict, Any, List, Optional
 import json
 import logging
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import litellm
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from planning.decomposition import decompose_goal, execute_plan, final_output
 from planning.dynamic_decomposition import dynamic_decomposition
-from planning.plan_and_solve import plan_and_solve
-from planning.tree_of_thoughts import tree_of_thoughts
-from planning.lats import lats
-from planning.self_refine import reflect_and_refine
-from planning.reflexion import reflexion
 from planning.environment import Environment
-
-import litellm
+from planning.lats import lats
+from planning.plan_and_solve import plan_and_solve
+from planning.reflexion import reflexion
+from planning.self_refine import reflect_and_refine
+from planning.tree_of_thoughts import tree_of_thoughts
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +119,7 @@ class PlanningAgent:
         if self.mode == "static":
             plan = decompose_goal(request, self.llm)
             trace["plan_dag"] = [t.model_dump() for t in plan.tasks]
-            
+
             raw_outputs = {}
             for batch in plan.execution_batches():
                 for task_id in batch:
@@ -128,7 +127,7 @@ class PlanningAgent:
                     method = self.route_subtask(task_item.instruction)
                     res = self.execute_subtask(task_item.instruction, method)
                     raw_outputs[task_id] = str(res["output"])
-                    
+
                     st_data = {"task_id": task_id, "instruction": task_item.instruction, "routing": res}
                     trace["subtasks"].append(st_data)
                     if step_callback:
@@ -139,13 +138,13 @@ class PlanningAgent:
         else:
             history = dynamic_decomposition(request, self.llm, max_steps=3)
             trace["history"] = history
-            
+
             executed_steps = []
             for task, raw_res in history:
                 method = self.route_subtask(task)
                 res = self.execute_subtask(task, method)
                 executed_steps.append((task, res))
-                
+
                 st_data = {
                     "instruction": task,
                     "method": method,
@@ -155,7 +154,7 @@ class PlanningAgent:
                 trace["subtasks"].append(st_data)
                 if step_callback:
                     step_callback(st_data)
-            
+
             # Synthesize clean executive summary instead of raw string concatenation
             synthesis_prompt = f"""Synthesize a concise, polished Executive Action Plan (in clean Markdown) for the goal: {request!r}
 Based on these executed sub-task results:
