@@ -114,6 +114,9 @@ SyncSessionLocal = sessionmaker(
     expire_on_commit=False
 )
 
+SessionLocal = SyncSessionLocal
+
+
 
 def _apply_schema_migrations(connection):
     """Safely apply backward-compatible schema patches to existing tables."""
