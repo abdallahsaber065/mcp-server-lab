@@ -32,11 +32,11 @@ class HITLService:
         return await repo.list_pending_tasks()
 
     @staticmethod
-    def resolve_task(session: Session, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin") -> bool:
+    def resolve_task(session: Session, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin", updated_payload: dict | None = None) -> bool:
         repo = HITLRepository(session)
-        return repo.resolve_task(task_id, decision, notes, decided_by)
+        return repo.resolve_task(task_id, decision, notes, decided_by, updated_payload)
 
     @staticmethod
-    async def aresolve_task(session: AsyncSession, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin") -> bool:
+    async def aresolve_task(session: AsyncSession, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin", updated_payload: dict | None = None) -> bool:
         repo = AsyncHITLRepository(session)
-        return await repo.resolve_task(task_id, decision, notes, decided_by)
+        return await repo.resolve_task(task_id, decision, notes, decided_by, updated_payload)

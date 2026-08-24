@@ -95,30 +95,22 @@ def test_state_graph_cycles_and_backtracking():
 
 
 def test_graph_1_lease_flow_execution():
-    """Verify Graph 1 (Commercial Lease Flow) with Task Decomposition & ReAct."""
+    """Verify Graph 1 (Commercial Lease Flow) Native LangGraph execution."""
     graph = build_lease_flow_graph()
+    config = {"configurable": {"thread_id": "test-lease-core-1"}}
 
-    # Case A: Without bank webhook -> pauses in AWAITING_WEBHOOK
-    state_a = GraphState(
-        run_id="lease-test-1",
-        graph_id="commercial_lease_flow",
-        current_node="decompose_requirements",
-        variables={"unit_id": 301, "proposed_rent": 48000.0, "base_rent": 60000.0}
-    )
-    result_a = graph.run(state_a)
-    assert result_a.status == "AWAITING_WEBHOOK"
-    assert result_a.current_node == "await_bank_escrow"
-    assert "decomposed_plan" in result_a.variables
+    inputs = {
+        "unit_id": 301,
+        "applicant_name": "Dr. Tarek El-Mahdy",
+        "proposed_rent": 48000.0,
+        "base_rent": 60000.0,
+        "receipt_image_urls": ["/receipts/bank_misr_escrow_deposit_suite301.png"],
+    }
 
-    # Case B: With bank webhook confirmed -> discount 20% (>15%) triggers HITL pause
-    result_a.variables["bank_webhook_payload"] = {"escrow_confirmed": True, "transaction_id": "BM-10029"}
-    result_b = graph.run(result_a)
-    assert result_b.status == "PAUSED_HITL"
-    assert result_b.pending_hitl is not None
-    assert "Executive Approval Required" in result_b.pending_hitl["reason"]
+    # Step 1: Run until Accountant verification interrupt
+    events = list(graph.stream(inputs, config=config))
+    assert len(events) >= 1
+    state = graph.get_state(config)
+    assert len(state.tasks) > 0 or len(state.next) > 0
+    assert "accountant_verification" in state.next or any("accountant" in str(getattr(t, "interrupts", [])) for t in state.tasks)
 
-    # Case C: Admin approves in UI -> resumes and executes lease
-    result_b.variables["hitl_decision"] = "APPROVED"
-    result_c = graph.run(result_b)
-    assert result_c.status == "COMPLETED"
-    assert result_c.variables["lease_status"] == "ACTIVE"

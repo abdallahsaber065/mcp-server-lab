@@ -5,7 +5,7 @@ Failure Ticket Repository (db/repositories/ticket_repo.py)
 import json
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -71,7 +71,7 @@ class TicketRepository(BaseRepository[GraphFailureTicket]):
             ticket.ticket_status = "resolved"
             ticket.resolution_notes = notes
             ticket.resolved_by = resolved_by
-            ticket.resolved_at = datetime.utcnow()
+            ticket.resolved_at = datetime.now(timezone.utc)
             self.session.commit()
             return True
         return False
@@ -133,7 +133,7 @@ class AsyncTicketRepository(AsyncBaseRepository[GraphFailureTicket]):
             ticket.ticket_status = "resolved"
             ticket.resolution_notes = notes
             ticket.resolved_by = resolved_by
-            ticket.resolved_at = datetime.utcnow()
+            ticket.resolved_at = datetime.now(timezone.utc)
             await self.session.commit()
             return True
         return False

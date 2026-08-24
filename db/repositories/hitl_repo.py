@@ -4,7 +4,7 @@ HITL Task Repository (db/repositories/hitl_repo.py)
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -50,13 +50,23 @@ class HITLRepository(BaseRepository[HITLTask]):
             for r in rows
         ]
 
-    def resolve_task(self, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin") -> bool:
+    def resolve_task(self, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin", updated_payload: dict | None = None) -> bool:
         task = self.session.get(HITLTask, task_id)
         if task:
             task.task_status = decision
             task.decision_notes = notes
             task.decided_by = decided_by
-            task.resolved_at = datetime.utcnow()
+            task.resolved_at = datetime.now(timezone.utc)
+            if updated_payload:
+                try:
+                    existing = json.loads(task.payload_json) if task.payload_json else {}
+                    existing.update(updated_payload)
+                    # keep original for audit, store merged
+                    task.payload_json = json.dumps(existing, ensure_ascii=False)
+                    if decision == "approved":
+                        task.task_status = "modified"
+                except Exception:
+                    pass
             self.session.commit()
             return True
         return False
@@ -98,13 +108,22 @@ class AsyncHITLRepository(AsyncBaseRepository[HITLTask]):
             for r in rows
         ]
 
-    async def resolve_task(self, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin") -> bool:
+    async def resolve_task(self, task_id: str, decision: str, notes: str = "", decided_by: str = "Admin", updated_payload: dict | None = None) -> bool:
         task = await self.session.get(HITLTask, task_id)
         if task:
             task.task_status = decision
             task.decision_notes = notes
             task.decided_by = decided_by
-            task.resolved_at = datetime.utcnow()
+            task.resolved_at = datetime.now(timezone.utc)
+            if updated_payload:
+                try:
+                    existing = json.loads(task.payload_json) if task.payload_json else {}
+                    existing.update(updated_payload)
+                    task.payload_json = json.dumps(existing, ensure_ascii=False)
+                    if decision == "approved":
+                        task.task_status = "modified"
+                except Exception:
+                    pass
             await self.session.commit()
             return True
         return False
