@@ -2,7 +2,7 @@
 Maintenance Request Repository (db/repositories/maintenance_repo.py)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -34,7 +34,7 @@ class MaintenanceRepository(BaseRepository[MaintenanceRequest]):
             description=description,
             estimated_cost=estimated_cost,
             status="open",
-            submitted_at=datetime.utcnow()
+            submitted_at=datetime.now(timezone.utc)
         )
         self.session.add(req)
         self.session.commit()
@@ -67,7 +67,7 @@ class AsyncMaintenanceRepository(AsyncBaseRepository[MaintenanceRequest]):
             description=description,
             estimated_cost=estimated_cost,
             status="open",
-            submitted_at=datetime.utcnow()
+            submitted_at=datetime.now(timezone.utc)
         )
         self.session.add(req)
         await self.session.commit()
