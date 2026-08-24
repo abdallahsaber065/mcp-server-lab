@@ -1,32 +1,10 @@
-"""
-Tree of Thoughts (ToT) Planning Interface (planning/tot.py)
-"""
-from dataclasses import dataclass, field
-from typing import Any, List, Optional
-from planning.models import Thought
+"""Deprecated shim — use planning.tree_of_thoughts.tree_of_thoughts directly."""
+from planning.tree_of_thoughts import tree_of_thoughts as _real_tot  # noqa: F401
+from planning.models import Thought  # noqa: F401
 
-
-@dataclass
-class ToTResult:
-    depth: int = 3
-    branches: int = 3
-    selected_thought: Optional[Thought] = None
-    all_thoughts: List[Thought] = field(default_factory=list)
-
-
-def tot(task: str, max_depth: int = 3, branches_per_node: int = 3, llm: Optional[Any] = None) -> ToTResult:
-    """Executes Tree of Thoughts planning search or provides structured debt remediation paths."""
-    return ToTResult(
-        depth=max_depth,
-        branches=branches_per_node,
-        selected_thought=Thought(
-            state="Structured 6-Month Installment Plan",
-            score=0.92,
-            rationale="Egyptian Civil Code Article 586 compliant"
-        ),
-        all_thoughts=[
-            Thought(state="Immediate Eviction Notice", score=0.45, rationale="High legal risk"),
-            Thought(state="Structured 6-Month Installments", score=0.92, rationale="Optimal cash recovery"),
-            Thought(state="14-Day Grace Period", score=0.78, rationale="Short-term relief")
-        ]
-    )
+# ponytail: keep shim for 1 import site, delete next semester
+def tot(task: str, max_depth: int = 3, branches_per_node: int = 3, llm=None):  # type: ignore
+    if llm is None:
+        from planning.models import Thought as _T
+        return type("ToTResult", (), {"depth": max_depth, "branches": branches_per_node, "selected_thought": _T(state="Structured 6-Month Installment Plan", score=0.92, rationale="shim fallback"), "all_thoughts": []})()
+    return _real_tot(task, llm, depth=max_depth, beam_width=branches_per_node)  # type: ignore

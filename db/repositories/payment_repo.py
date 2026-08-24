@@ -4,7 +4,7 @@ Handles payment ledger queries, payment recording, and tenant billing history.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -81,14 +81,14 @@ class PaymentRepository(BaseRepository[Payment]):
         due_date: Optional[str] = None,
         notes: Optional[str] = None
     ) -> Dict[str, Any]:
-        ref = f"TXN-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
-        due = due_date or datetime.utcnow().strftime("%Y-%m-%d")
+        ref = f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        due = due_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
         payment = Payment(
             lease_id=lease_id,
             tenant_id=tenant_id,
             amount=amount,
             due_date=due,
-            payment_date=datetime.utcnow(),
+            payment_date=datetime.now(timezone.utc),
             payment_method=payment_method,
             transaction_reference=ref,
             status="paid",
@@ -152,14 +152,14 @@ class AsyncPaymentRepository(AsyncBaseRepository[Payment]):
         due_date: Optional[str] = None,
         notes: Optional[str] = None
     ) -> Dict[str, Any]:
-        ref = f"TXN-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
-        due = due_date or datetime.utcnow().strftime("%Y-%m-%d")
+        ref = f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        due = due_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
         payment = Payment(
             lease_id=lease_id,
             tenant_id=tenant_id,
             amount=amount,
             due_date=due,
-            payment_date=datetime.utcnow(),
+            payment_date=datetime.now(timezone.utc),
             payment_method=payment_method,
             transaction_reference=ref,
             status="paid",
