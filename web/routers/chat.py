@@ -78,6 +78,7 @@ class StreamChatRequest(BaseModel):
     user_email: Optional[str] = None
     tenant_id: Optional[int] = None
     rag_strategy: str = "naive"
+    chat_mode: str = "standard"
     conversation_history: List[Dict[str, Any]] = []
 
     def get_message(self) -> str:
@@ -255,7 +256,154 @@ async def chat_stream_endpoint(req: StreamChatRequest, request: Request, db: Asy
     async def sse_wrapper():
         full_assistant_text = ""
 
-        # Step 1: Run Mistral Intent Classification Router
+        # Graph-agent mode: bypass Standard RAG/memory, run intake + background
+        is_graph_mode = req.chat_mode in ("lease_onboarding", "maintenance_tender", "arrears_mediation")
+        if is_graph_mode:
+            # Load existing slots and last run from history
+            existing_slots = {}
+            last_run_id = None
+            last_graph_id = None
+            for m in prior_messages:
+                if m.get("type") == "state_graph_slots":
+                    try:
+                        c = json.loads(m.get("content", "{}"))
+                        existing_slots.update(c.get("slots", {}))
+                    except Exception:
+                        pass
+                if m.get("type") in ("state_graph_launching", "state_graph_update"):
+                    try:
+                        c = json.loads(m.get("content", "{}"))
+                        if c.get("run_id"):
+                            last_run_id = c.get("run_id")
+                            last_graph_id = c.get("graph_id") or last_graph_id
+                    except Exception:
+                        pass
+            # Progress/status query — synthesize whole-graph context via LLM (not canned), user-friendly not technical
+            lower_msg = (msg_text or "").lower().strip()
+            status_keywords = [
+                "progress", "status", "stasut", "stauts", "statue", "where", "update", "how is",
+                "what's happening", "whats happening", "where is my", "is it done", "how long",
+                "when will", "follow up", "what happened", "state", "approved", "rejected"
+            ]
+            is_progress_query = any(kw in lower_msg for kw in status_keywords) or (last_run_id and any(q in lower_msg for q in ["?", "what", "is", "now", "هل", "ماذا", "أين", "حال"]))
+            if is_progress_query and last_run_id:
+                try:
+                    from sqlalchemy import select as _select
+                    from db.models import GraphCheckpoint as _GC
+                    rows = (await db.scalars(_select(_GC).where(_GC.run_id == last_run_id).order_by(_GC.step_number.asc()))).all()
+                    latest = rows[-1] if rows else None
+                    if latest:
+                        import json as _j2
+                        latest_data = _j2.loads(latest.state_json) if isinstance(latest.state_json, str) else (latest.state_json or {})
+                        checkpoint_obj = latest_data.get("checkpoint", {}) if isinstance(latest_data, dict) else {}
+                        channel_vals = checkpoint_obj.get("channel_values", {}) if isinstance(checkpoint_obj, dict) else {}
+                        variables = channel_vals or latest_data.get("variables", {}) or {}
+                        pending = latest_data.get("pending_hitl") or checkpoint_obj.get("pending_hitl")
+                        status = str(variables.get("status") or variables.get("lease_status") or latest.status)
+                        node = latest.node_name
+
+                        ans = None
+                        try:
+                            import litellm as _lit
+                            sys_prompt = (
+                                "You are Cornerstone Realty's concierge customer assistant. Summarize the request's current status in 2-3 short sentences, "
+                                "warm, professional, and clear. Never mention internal node names, run_id, or graph_id. "
+                                "If the lease was rejected or declined, explain politely that the proposed rate was not approved and offer alternatives. "
+                                "If awaiting accounting or executive review, explain that the documents/concessions are currently being finalized. "
+                                "Focus on what matters to the customer (unit, price, timeline, next step)."
+                            )
+                            user_prompt = (
+                                f"Graph: {last_graph_id}, status: {status}, current step: {node}, "
+                                f"key vars: {json.dumps({k: str(variables[k])[:100] for k in list(variables)[:8]}, ensure_ascii=False)}, "
+                                f"pending: {json.dumps(pending, ensure_ascii=False) if pending else 'none'}. "
+                                f"User asked: '{msg_text}'. Give an accurate, helpful update."
+                            )
+                            resp = await _lit.acompletion(
+                                model="gemini/gemini-3.1-flash-lite",
+                                messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+                                temperature=1.0,
+                                max_tokens=260
+                            )
+                            ans = (resp.choices[0].message.content or "").strip()
+                        except Exception as ex:
+                            logger.warning("LLM progress synthesis fallback: %s", ex)
+                            ans = None
+
+                        if not ans:
+                            unit = variables.get("unit_id", 301)
+                            if status in ("REJECTED", "rejected") or variables.get("executive_decision") in ("REJECT", "REJECTED"):
+                                ans = f"Your lease request for Unit {unit} was reviewed, but the proposed concession was not approved at this time. Our leasing team would be delighted to assist you with standard terms or explore alternative suites."
+                            elif status in ("ACTIVE", "COMPLETED", "completed"):
+                                ans = f"Great news! Your request for Unit {unit} has been **approved and finalized**. Our operations team is preparing the formal handover."
+                            elif status in ("PAUSED_HITL", "AWAITING_WEBHOOK") or "accountant" in node or "executive" in node:
+                                ans = f"Your request for Unit {unit} is currently with our management team for final review. We will notify you right here as soon as the review is complete."
+                            else:
+                                ans = f"Your request for Unit {unit} is progressing through the review stages. We are actively finalizing the details for you."
+
+                        await repo.save_chat_message(session_id=req.session_id, msg_type="assistant", content=ans)
+                        yield f"data: {json.dumps({'type': 'token', 'content': ans}, ensure_ascii=False)}\n\n"
+                        yield f"data: {json.dumps({'type': 'done', 'final_answer': ans}, ensure_ascii=False)}\n\n"
+                        return
+                    else:
+                        ans = "I don’t see an active request for this chat yet. Would you like to explore available units or start an application?"
+                        await repo.save_chat_message(session_id=req.session_id, msg_type="assistant", content=ans)
+                        yield f"data: {json.dumps({'type': 'token', 'content': ans}, ensure_ascii=False)}\n\n"
+                        yield f"data: {json.dumps({'type': 'done', 'final_answer': ans}, ensure_ascii=False)}\n\n"
+                        return
+                except Exception as e:
+                    ans = f"We are currently reviewing your request. Please check back shortly or check the timeline tab."
+                    yield f"data: {json.dumps({'type': 'token', 'content': ans}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'done', 'final_answer': ans}, ensure_ascii=False)}\n\n"
+                    return
+            from services.chat_intake_service import ChatIntakeService
+            from services.state_graph_background import run_graph_in_background
+            logger.info("chat graph_mode=%s session=%s user=%s slots_in=%s msg=%.120s", req.chat_mode, req.session_id, effective_tenant_id, existing_slots, msg_text)
+            intake = await ChatIntakeService.run_intake_turn(
+                db, effective_tenant_id, req.session_id, req.chat_mode, history_for_llm, msg_text, uploaded_images, existing_slots
+            )
+            logger.info("chat intake out ready=%s slots=%s graph=%s", intake["ready_to_launch"], intake["slots"], intake["graph_id"])
+            # Persist slots
+            await repo.save_chat_message(session_id=req.session_id, msg_type="state_graph_slots", content=json.dumps({"mode": req.chat_mode, "slots": intake["slots"], "graph_id": intake["graph_id"]}, ensure_ascii=False))
+            yield f"data: {json.dumps({'type': 'state_graph_slots', 'mode': req.chat_mode, 'slots': intake['slots'], 'graph_id': intake['graph_id']}, ensure_ascii=False)}\n\n"
+            if not intake["ready_to_launch"]:
+                # Ask for next slot
+                q = intake["next_question"]
+                await repo.save_chat_message(session_id=req.session_id, msg_type="assistant", content=q)
+                yield f"data: {json.dumps({'type': 'token', 'content': q}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'final_answer': q}, ensure_ascii=False)}\n\n"
+                return
+            else:
+                # Ready to launch — fire background
+                import uuid as _uuid
+                run_id = f"run-{_uuid.uuid4().hex[:8]}"
+                launch_vars = intake["launch_variables"] or {}
+                # Ensure session and user tracking in variables
+                launch_vars["origin_session_id"] = req.session_id
+                launch_vars["origin_user_id"] = effective_tenant_id
+                # Customer-service launch message — no technical IDs
+                graph_labels = {
+                    "commercial_lease_flow": "lease onboarding",
+                    "renovation_permit_flow": "maintenance",
+                    "rent_arrears_settlement_flow": "payment assistance",
+                }
+                label = graph_labels.get(intake['graph_id'], "request")
+                launch_msg = f"Thank you! Your {label} request has been received and is now being reviewed by our team. We’ll update you right here when the next step is ready — you don’t need to stay in this chat or keep it open. You can also check progress anytime from your chat history." 
+                await repo.save_chat_message(session_id=req.session_id, msg_type="state_graph_launching", content=json.dumps({"graph_id": intake["graph_id"], "run_id": run_id, "session_id": req.session_id, "variables": launch_vars}, ensure_ascii=False))
+                yield f"data: {json.dumps({'type': 'state_graph_launching', 'graph_id': intake['graph_id'], 'run_id': run_id, 'session_id': req.session_id}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'content': launch_msg}, ensure_ascii=False)}\n\n"
+                logger.info("chat launch graph=%s run_id=%s vars=%s", intake["graph_id"], run_id, json.dumps(launch_vars, ensure_ascii=False, default=str)[:800])
+                # Fire-and-forget in daemon thread — never blocks SSE stream or event loop
+                try:
+                    from services.state_graph_background import fire_and_forget_graph
+                    fire_and_forget_graph(run_id, intake["graph_id"], launch_vars, effective_tenant_id, req.session_id)
+                    logger.info("chat background thread launched run_id=%s", run_id)
+                except Exception as e:
+                    logger.exception("chat background launch failed run_id=%s err=%s", run_id, e)
+                await repo.save_chat_message(session_id=req.session_id, msg_type="assistant", content=launch_msg)
+                yield f"data: {json.dumps({'type': 'done', 'final_answer': launch_msg}, ensure_ascii=False)}\n\n"
+                return
+
+        # Step 1: Run Mistral Intent Classification Router (Standard mode)
         intent_res = await llm_engine.classify_intent(msg_text)
         intent_event = {
             "type": "intent_routed",
@@ -285,6 +433,31 @@ async def chat_stream_endpoint(req: StreamChatRequest, request: Request, db: Asy
                 content=json.dumps(self_rag_payload, ensure_ascii=False)
             )
             yield f"data: {json.dumps(self_rag_payload)}\n\n"
+
+        # STATE_GRAPH invitation (minimal chat surface — Studio owns execution)
+        if intent_res["intent"] == "STATE_GRAPH":
+            gid = intent_res.get("graph_id") or "commercial_lease_flow"
+            # normalize via service aliases
+            try:
+                from services.state_graph_service import StateGraphService
+                gid = StateGraphService.canonical_id(gid)
+            except Exception:
+                pass
+            catalog = {
+                "commercial_lease_flow": {"label": "Graph 1: Lease Onboarding & Receipt Verification", "narrative": "Suite-301 (60k→48k), 144k escrow, Gemini Vision OCR + accountant + executive HITL", "variables": {"unit_id": 301, "proposed_rent": 48000, "base_rent": 60000}},
+                "renovation_permit_flow": {"label": "Graph 2: Maintenance & Contractor Tender", "narrative": "Cornerstone Heights — RAG Law 4/1996 + LATS 3 contractors + engineer HITL", "variables": {"location": "Cornerstone Heights - Zamalek"}},
+                "rent_arrears_settlement_flow": {"label": "Graph 3: Arrears Mediation", "narrative": "90k arrears — ToT 3 strategies + tenant counter 9mo cycle + counsel HITL", "variables": {"tenant_id": 1, "unpaid_months": 3, "monthly_rent": 40000}},
+            }
+            info = catalog.get(gid, catalog["commercial_lease_flow"])
+            invitation = {"type": "state_graph_invitation", "graph_id": gid, "label": info["label"], "narrative": info["narrative"], "variables_prefill": info["variables"], "deep_link": f"/stateGraph?graph={gid}"}
+            await repo.save_chat_message(session_id=req.session_id, msg_type="state_graph_invitation", content=json.dumps(invitation, ensure_ascii=False))
+            yield f"data: {json.dumps(invitation, ensure_ascii=False)}\n\n"
+            # short helper token
+            helper = f"Detected stateful workflow — **{info['label']}**. Open State Graph Studio to run the full live graph with streaming, checkpoints, and HITL. [Open Studio]({invitation['deep_link']})"
+            yield f"data: {json.dumps({'type': 'token', 'content': helper}, ensure_ascii=False)}\n\n"
+            await repo.save_chat_message(session_id=req.session_id, msg_type="assistant", content=helper)
+            yield f"data: {json.dumps({'type': 'done', 'final_answer': helper}, ensure_ascii=False)}\n\n"
+            return
 
         # Step 2: Planning Agent Execution (if classified as PLANNING)
         if intent_res["intent"] == "PLANNING":

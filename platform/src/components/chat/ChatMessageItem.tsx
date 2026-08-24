@@ -10,6 +10,7 @@ import { MemoryCard, MemoryContextData } from './MemoryCard';
 import { ChatUnitsShowcase } from './ChatUnitsShowcase';
 import { ChatToursShowcase } from './ChatToursShowcase';
 import { RichContent } from '../common/RichContent';
+import { StateGraphInvitationCard, type StateGraphInvitation } from './StateGraphInvitationCard';
 
 export interface ChatMessage {
   id: string;
@@ -40,6 +41,7 @@ export interface ChatMessage {
   confirmation?: ActionConfirmationPayload;
   selfRag?: SelfRagPayload;
   memory?: MemoryContextData;
+  stateGraphInvitation?: StateGraphInvitation;
 }
 
 interface ChatMessageItemProps {
@@ -177,6 +179,9 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             onResolved={(finalAnswer) => onActionResolved?.(finalAnswer)}
           />
         )}
+
+        {/* State Graph Invitation (minimal chat surface) */}
+        {message.stateGraphInvitation && <StateGraphInvitationCard invitation={message.stateGraphInvitation} />}
 
         {/* Human Elicitation Card (Fallback / Lease Terms) */}
         {!message.confirmation && message.elicitation && (

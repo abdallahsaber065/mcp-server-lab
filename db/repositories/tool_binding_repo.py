@@ -2,7 +2,7 @@
 Agent Tool Binding Repository (db/repositories/tool_binding_repo.py)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from sqlalchemy import select
@@ -30,7 +30,7 @@ class ToolBindingRepository(BaseRepository[AgentToolBinding]):
         binding = self.session.scalars(stmt).first()
         if binding:
             binding.is_enabled = is_enabled
-            binding.updated_at = datetime.utcnow()
+            binding.updated_at = datetime.now(timezone.utc)
         else:
             binding = AgentToolBinding(agent_id=agent_id, tool_name=tool_name, is_enabled=is_enabled)
             self.session.add(binding)
@@ -57,7 +57,7 @@ class AsyncToolBindingRepository(AsyncBaseRepository[AgentToolBinding]):
         binding = result.first()
         if binding:
             binding.is_enabled = is_enabled
-            binding.updated_at = datetime.utcnow()
+            binding.updated_at = datetime.now(timezone.utc)
         else:
             binding = AgentToolBinding(agent_id=agent_id, tool_name=tool_name, is_enabled=is_enabled)
             self.session.add(binding)

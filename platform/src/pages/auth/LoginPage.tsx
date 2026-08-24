@@ -50,11 +50,11 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuick = async (role: 'executive_admin' | 'property_manager' | 'tenant') => {
+  const handleQuick = async (role: any) => {
     setErrorMsg('');
     try {
       await quickLoginAs(role);
-      addToast(`Signed in as ${role.replace('_', ' ').toUpperCase()}`, 'success');
+      addToast(`Signed in as ${String(role).replace('_', ' ').toUpperCase()}`, 'success');
       setCurrentPage('dashboard');
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to authenticate quick persona.');
@@ -279,6 +279,32 @@ export const LoginPage: React.FC = () => {
             </div>
             <User className="w-4 h-4 text-emerald-400" />
           </button>
+
+          <div className="pt-2 border-t border-slate-800 mt-2">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Operational Department Access</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => handleQuick('accountant' as any)} className="p-2.5 rounded-xl bg-amber-950/30 hover:bg-amber-900/40 border border-amber-500/30 text-left">
+                <div className="text-xs font-bold text-amber-300">Accountant</div>
+                <div className="text-[10px] text-slate-400 truncate">mona.hawary@...</div>
+                <div className="text-[9px] text-slate-500">AccountantPass123!</div>
+              </button>
+              <button onClick={() => handleQuick('chief_engineer' as any)} className="p-2.5 rounded-xl bg-cyan-950/30 hover:bg-cyan-900/40 border border-cyan-500/30 text-left">
+                <div className="text-xs font-bold text-cyan-300">Chief Engineer</div>
+                <div className="text-[10px] text-slate-400 truncate">hani.farouk@...</div>
+                <div className="text-[9px] text-slate-500">EngineerPass123!</div>
+              </button>
+              <button onClick={() => handleQuick('legal_counsel' as any)} className="p-2.5 rounded-xl bg-violet-950/30 hover:bg-violet-900/40 border border-violet-500/30 text-left">
+                <div className="text-xs font-bold text-violet-300">Legal Counsel</div>
+                <div className="text-[10px] text-slate-400 truncate">nour.eldin@...</div>
+                <div className="text-[9px] text-slate-500">LegalPass123!</div>
+              </button>
+              <button onClick={() => handleQuick('finance_officer' as any)} className="p-2.5 rounded-xl bg-emerald-950/30 hover:bg-emerald-900/40 border border-emerald-500/30 text-left">
+                <div className="text-xs font-bold text-emerald-300">Finance Officer</div>
+                <div className="text-[10px] text-slate-400 truncate">amira.finance@...</div>
+                <div className="text-[9px] text-slate-500">FinancePass123!</div>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

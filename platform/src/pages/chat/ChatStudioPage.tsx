@@ -8,7 +8,7 @@ import { apiClient } from '../../services/api';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useAppStore } from '../../stores/useAppStore';
 
-import { ChatHeader } from '../../components/chat/ChatHeader';
+import { ChatHeader, type ChatMode } from '../../components/chat/ChatHeader';
 import { ChatSessionsDrawer } from '../../components/chat/ChatSessionsDrawer';
 import { ChatMessageItem, ChatMessage } from '../../components/chat/ChatMessageItem';
 import { ChatInputBar } from '../../components/chat/ChatInputBar';
@@ -176,6 +176,14 @@ function reconstructConversation(rawMessages: any[]): ChatMessage[] {
       } else {
         currentAssistant.memory = memObj;
       }
+    } else if (mType === 'state_graph_invitation') {
+      let inv: any = undefined;
+      try { inv = typeof m.content === 'string' ? JSON.parse(m.content) : m.content; } catch { inv = m.content; }
+      if (!currentAssistant) {
+        currentAssistant = { id: `asst-${m.id || Math.random()}`, sender: 'assistant', content: '', stateGraphInvitation: inv, subtasks: [], toolTraces: [] };
+      } else {
+        (currentAssistant as any).stateGraphInvitation = inv;
+      }
     } else if (mType === 'assistant' || mType === 'token' || mType === 'chunk') {
       const textChunk = m.content || m.message_text || m.text || '';
       if (!currentAssistant) {
@@ -225,6 +233,14 @@ export const ChatStudioPage: React.FC = () => {
   const setSelectedRag = (rag: 'naive' | 'hybrid' | 'agentic' | 'graph' | 'pgvector') => {
     localStorage.setItem('cornerstone_selected_rag', rag);
     setSelectedRagState(rag);
+  };
+
+  const [chatMode, setChatModeState] = useState<ChatMode>(() => {
+    return (localStorage.getItem('cornerstone_chat_mode') as ChatMode) || 'standard';
+  });
+  const setChatMode = (mode: ChatMode) => {
+    localStorage.setItem('cornerstone_chat_mode', mode);
+    setChatModeState(mode);
   };
 
   // Messages & Stream State
@@ -285,6 +301,30 @@ export const ChatStudioPage: React.FC = () => {
   useEffect(() => {
     loadSessions();
   }, [user?.id, user?.email]);
+
+  // Listen for background graph notifications that target this chat (even after days)
+  useEffect(() => {
+    const handler = (e: any) => {
+      const detail = e.detail || {};
+      const sessionId = detail.session_id;
+      const runId = detail.run_id;
+      if (sessionId) {
+        // If notification is for current session, reload messages; else show toast already did navigation
+        if (sessionId === activeSessionId) {
+          loadSessionMessages(sessionId);
+        } else {
+          // For other sessions, just refresh the sessions list to show updated title/unread
+          loadSessions(true);
+        }
+      }
+    };
+    window.addEventListener('sg-notification', handler as any);
+    window.addEventListener('sg-notification-open', handler as any);
+    return () => {
+      window.removeEventListener('sg-notification', handler as any);
+      window.removeEventListener('sg-notification-open', handler as any);
+    };
+  }, [activeSessionId]);
 
   const loadSessions = async (keepCurrentActive: boolean = false) => {
     try {
@@ -449,6 +489,7 @@ export const ChatStudioPage: React.FC = () => {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
+      const isGraphMode = chatMode !== 'standard';
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers,
@@ -458,7 +499,8 @@ export const ChatStudioPage: React.FC = () => {
           message: userText,
           image_urls: attachedImages || [],
           model: selectedModel,
-          rag_strategy: selectedRag,
+          rag_strategy: isGraphMode ? 'graph_agent' : selectedRag,
+          chat_mode: chatMode,
           role: user?.role || role || 'prospect',
           user_email: user?.email,
           tenant_id: user?.tenant_id || user?.id,
@@ -570,6 +612,10 @@ export const ChatStudioPage: React.FC = () => {
                       };
                     }
 
+                    if (event.type === 'state_graph_invitation') {
+                      return { ...msg, stateGraphInvitation: event as any };
+                    }
+
                     if (event.type === 'token' || event.type === 'chunk' || event.type === 'assistant' || event.type === 'fallback') {
                       return {
                         ...msg,
@@ -675,6 +721,8 @@ export const ChatStudioPage: React.FC = () => {
         onChangeModel={setSelectedModel}
         selectedRag={selectedRag}
         onChangeRag={setSelectedRag}
+        selectedMode={chatMode}
+        onChangeMode={setChatMode}
       />
 
       {/* Main Studio Body: Sessions Drawer + Message Area */}
@@ -726,6 +774,7 @@ export const ChatStudioPage: React.FC = () => {
             onStopStream={handleStopStream}
             onSelectPrompt={(prompt) => setInputValue(prompt)}
             role={role}
+            chatMode={chatMode}
           />
         </div>
       </div>

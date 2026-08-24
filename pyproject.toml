@@ -29,6 +29,8 @@ dependencies = [
     "ruff>=0.16.4",
     "basedpyright>=1.39.10",
     "pre-commit>=4.6.2",
+    "langgraph>=1.2.11",
+    "langgraph-checkpoint-sqlite>=3.1.1",
 ]
 
 [build-system]

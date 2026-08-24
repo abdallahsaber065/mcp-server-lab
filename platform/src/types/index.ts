@@ -1,4 +1,4 @@
-export type UserRole = 'tenant' | 'property_manager' | 'executive_admin' | 'public';
+export type UserRole = 'tenant' | 'property_manager' | 'executive_admin' | 'accountant' | 'chief_engineer' | 'legal_counsel' | 'finance_officer' | 'site_supervisor' | 'prospect' | 'landlord' | 'public';
 
 export interface User {
   id: number;

@@ -106,5 +106,50 @@
     "role": "landlord",
     "assigned_unit_id": null,
     "emergency_contact": "Wealth Management Office (+20 2 2450 7700)"
+  },
+  {
+    "tenant_id": 13,
+    "full_name": "Mona El-Hawary (Chief Accountant)",
+    "email": "mona.hawary@cornerstonerealty.eg",
+    "phone": "+20 100 200 3013",
+    "role": "accountant",
+    "assigned_unit_id": null,
+    "emergency_contact": "Finance Dept (+20 2 2888 3013)"
+  },
+  {
+    "tenant_id": 14,
+    "full_name": "Eng. Hani Farouk (Chief Engineer)",
+    "email": "hani.farouk@cornerstonerealty.eg",
+    "phone": "+20 100 200 3014",
+    "role": "chief_engineer",
+    "assigned_unit_id": null,
+    "emergency_contact": "Engineering HQ (+20 2 2888 3014)"
+  },
+  {
+    "tenant_id": 15,
+    "full_name": "Counsel Nour El-Din (Legal Counsel)",
+    "email": "nour.eldin@cornerstonerealty.eg",
+    "phone": "+20 100 200 3015",
+    "role": "legal_counsel",
+    "assigned_unit_id": null,
+    "emergency_contact": "Legal Affairs (+20 2 2888 3015)"
+  },
+  {
+    "tenant_id": 16,
+    "full_name": "Amira Finance (Finance Officer)",
+    "email": "amira.finance@cornerstonerealty.eg",
+    "phone": "+20 100 200 3016",
+    "role": "finance_officer",
+    "assigned_unit_id": null,
+    "emergency_contact": "Treasury (+20 2 2888 3016)"
+  },
+  {
+    "tenant_id": 17,
+    "full_name": "Omar Zaki (Site Supervisor)",
+    "email": "omar.zaki@cornerstonerealty.eg",
+    "phone": "+20 100 200 3017",
+    "role": "site_supervisor",
+    "assigned_unit_id": null,
+    "emergency_contact": "Site Ops (+20 2 2888 3017)"
   }
 ]

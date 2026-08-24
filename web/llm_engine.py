@@ -34,24 +34,37 @@ class MCPLLMEngine:
         self.default_model = default_model
 
     async def classify_intent(self, user_message: str) -> Dict[str, str]:
-        """Uses cheapest Mistral 7B model to route requests between Standard Chat and Planning Agent."""
+        """Routes between STANDARD / PLANNING / STATE_GRAPH (lease/receipt, maintenance, arrears)."""
+        # Fast keyword fallback for Arabic + state-graph cues before LLM call
+        low = user_message.lower()
+        state_keywords = {
+            "commercial_lease_flow": ["suite-301", "receipt", "إيصال", "escrow", "discount", "خصم", "lease application", "تأجير", "bank deposit", "accountant", "تأكيد وصول"],
+            "maintenance_dispatch_flow": ["صيانة", "maintenance", "contractor", "مقاول", "مناقصة", "plumbing", "riser", "emergency repair", "engineer", "تسريب"],
+            "arrears_care_flow": ["متأخرات", "arrears", "eviction", "settlement", "تسوية", "counter offer", "قضية", "arrear", "جدولة", "reschedule"],
+            # aliases for backward compat
+            "renovation_permit_flow": ["صيانة", "maintenance", "contractor", "مقاول"],
+            "rent_arrears_settlement_flow": ["متأخرات", "arrears", "eviction"],
+        }
+        for gid, kws in state_keywords.items():
+            if any(k in low for k in kws):
+                return {"intent": "STATE_GRAPH", "rationale": f"State-graph cue matched {gid}", "graph_id": gid}
+
         router_prompt = """You are an Intent Classifier for Cornerstone Realty Group B property management.
-Classify the incoming user message into either "PLANNING" or "STANDARD".
+Classify the incoming user message into "PLANNING", "STATE_GRAPH" or "STANDARD".
+
+Set intent to "STATE_GRAPH" if:
+- Lease onboarding with receipt/Vision/escrow/executive discount (Suite-301, 60k→48k, 144k, accountant, modify_lease_terms)
+- Emergency maintenance dispatch, contractor tender, RAG Law 4/1996, LATS, engineer HITL, tenant rating
+- Arrears mediation, ToT settlement, counter-offer 9mo, counsel HITL, record_rent_payment
+Return also graph_id: one of commercial_lease_flow | maintenance_dispatch_flow | arrears_care_flow
 
 Set intent to "PLANNING" ONLY if:
 - Request involves multi-step emergency disaster repair re-scheduling (e.g., plumbing riser burst, electrical fire at Nile Tower, multi-contractor conflict resolution).
 - Request requires multi-contractor coordination, tenant temporary relocation planning logistics, or multi-step DAG task decomposition (LATS, Tree of Thoughts).
 
-Set intent to "STANDARD" for:
-- Database inquiries, unit lookups, property queries, and active lease checks.
-- Single MCP tool executions:
-  * Running a property compliance audit / occupancy audit (`run_property_audit`)
-  * Submitting a maintenance ticket (`submit_maintenance_request`)
-  * Modifying lease terms or rent discounts (`modify_lease_terms`)
-  * Looking up available units (`lookup_available_units`)
-- General operational questions, policy binder inquiries, or user identity questions.
+Set intent to "STANDARD" otherwise.
 
-Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale": "<1-sentence reason>"}"""
+Return ONLY valid JSON: {"intent": "PLANNING"|"STATE_GRAPH"|"STANDARD", "graph_id": "<if STATE_GRAPH>", "rationale": "<1-sentence>"}"""
 
         try:
             resp: Any = litellm.completion(
@@ -67,10 +80,12 @@ Return ONLY valid JSON matching: {"intent": "PLANNING" | "STANDARD", "rationale"
             data = json.loads(raw_clean)
             intent_val = str(data.get("intent", "STANDARD")).upper()
             rationale = str(data.get("rationale", ""))
-            return {
-                "intent": "PLANNING" if "PLAN" in intent_val else "STANDARD",
-                "rationale": rationale
-            }
+            gid = str(data.get("graph_id", "")).strip()
+            if "STATE" in intent_val:
+                return {"intent": "STATE_GRAPH", "rationale": rationale, "graph_id": gid}
+            if "PLAN" in intent_val:
+                return {"intent": "PLANNING", "rationale": rationale}
+            return {"intent": "STANDARD", "rationale": rationale}
         except Exception as e:
             logger.warning(f"Mistral intent classification failed ({e}), defaulting to STANDARD")
             return {"intent": "STANDARD", "rationale": "Fallback to standard execution"}

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Send, StopCircle, Sparkles, Image as ImageIcon, X, Loader2 } from 'lucide-react';
+import { Send, StopCircle, Image as ImageIcon, X, Loader2, FileSearch, Wrench, Scale } from 'lucide-react';
 import { UserRole } from '../../types';
+import { ChatMode } from './ChatHeader';
 import { apiClient } from '../../services/api';
 
 interface ChatInputBarProps {
@@ -11,6 +12,7 @@ interface ChatInputBarProps {
   onStopStream: () => void;
   onSelectPrompt?: (prompt: string) => void;
   role?: UserRole;
+  chatMode?: ChatMode;
 }
 
 export const ChatInputBar: React.FC<ChatInputBarProps> = ({
@@ -21,12 +23,13 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onStopStream,
   onSelectPrompt,
   role = 'property_manager',
+  chatMode = 'standard',
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
-  const getQuickPrompts = () => {
+  const getStandardPrompts = () => {
     switch (role) {
       case 'tenant':
         return [
@@ -53,7 +56,45 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
   };
 
-  const quickPrompts = getQuickPrompts();
+  const getGraphPrompts = (): { label: string; prompts: string[]; icon: any } => {
+    // One natural, tenant-tied prompt per specialized graph — generic user voice, not technical slot language
+    // Triggers real state graph (Vision/LATS/ToT) via intent + slot filling without exposing internals
+    switch (chatMode) {
+      case 'lease_onboarding':
+        return {
+          label: 'Commercial Lease — Quick Prompts',
+          prompts: [
+            "Hi, I'm Dr. Tarek El-Mahdy — I'd like to lease Suite-301 in Giza Medical Tower at 48,000 EGP/mo. What are the terms?",
+            "Here is my Banque Misr transfer receipt of 144,000 EGP for the escrow deposit of Suite-301.",
+          ],
+          icon: FileSearch,
+        };
+      case 'maintenance_tender':
+        return {
+          label: 'Emergency Maintenance — Quick Prompts',
+          prompts: [
+            "Hi, I'm Dr. Tarek El-Mahdy in Suite 301 at Nile Heights Tower — there is an urgent structural pipe leak causing flooding. Please dispatch emergency repair.",
+            "I rate the completed plumbing repair 5 stars. Excellent and clean job.",
+          ],
+          icon: Wrench,
+        };
+      case 'arrears_mediation':
+        return {
+          label: 'Arrears Restructuring — Quick Prompts',
+          prompts: [
+            "Hi, I'm Dr. Tarek El-Mahdy — I have 2 months of unpaid rent totaling 90,000 EGP. Can we explore a debt restructuring plan?",
+            "I accept Plan A for the 6-month installment schedule of 15,000 EGP/mo.",
+          ],
+          icon: Scale,
+        };
+      default:
+        return { label: 'Standard', prompts: getStandardPrompts(), icon: FileSearch };
+    }
+  };
+
+  const isGraphMode = chatMode !== 'standard';
+  const graphPrompts = isGraphMode ? getGraphPrompts() : null;
+  const quickPrompts = isGraphMode ? graphPrompts!.prompts : getStandardPrompts();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -96,25 +137,29 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
   };
 
+  const placeholder = isGraphMode
+    ? `Graph agent ${chatMode.replace('_', ' ')} — describe your request or upload receipt...`
+    : `Ask anything as ${role?.replace('_', ' ')} or attach receipts/photos...`;
+
   return (
     <div className="p-3 sm:p-4 border-t border-slate-800/80 bg-slate-900/70 backdrop-blur-md shrink-0 space-y-2.5">
-      {/* Quick Prompt Chips */}
+      {/* Quick Prompt Chips — organized per mode */}
       {onSelectPrompt && (
-        <div className="max-w-4xl mx-auto flex items-center gap-1.5 overflow-x-auto pb-1 text-slate-400 text-[11px] no-scrollbar">
-          <div className="flex items-center space-x-1 text-[10px] uppercase font-bold text-indigo-400 shrink-0 mr-1">
-            <Sparkles className="w-3 h-3" />
-            <span>{role?.replace('_', ' ')} Prompts:</span>
+        <div className="max-w-4xl mx-auto space-y-1.5">
+          <div />
+          <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {quickPrompts.map((q, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onSelectPrompt(q)}
+                className={`px-2.5 py-1 rounded-lg border text-left truncate shrink-0 text-[11px] transition-all ${isGraphMode ? 'bg-violet-950/30 hover:bg-violet-900/40 text-violet-200 border-violet-500/30 hover:border-violet-400/50' : 'bg-slate-800/70 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-200 border-slate-700/60 hover:border-indigo-500/40'}`}
+                title={q}
+              >
+                {q}
+              </button>
+            ))}
           </div>
-          {quickPrompts.map((q, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => onSelectPrompt(q)}
-              className="px-2.5 py-1 rounded-lg bg-slate-800/70 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-200 border border-slate-700/60 hover:border-indigo-500/40 transition-all text-left truncate shrink-0 text-[11px]"
-            >
-              {q}
-            </button>
-          ))}
         </div>
       )}
 
@@ -178,7 +223,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               }
             }
           }}
-          placeholder={`Ask anything as ${role?.replace('_', ' ')} or attach receipts/photos...`}
+          placeholder={placeholder}
           disabled={isStreaming}
           className="flex-1 px-4 py-2.5 rounded-xl bg-slate-950/90 border border-slate-700/80 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 transition-all resize-none leading-relaxed"
         />

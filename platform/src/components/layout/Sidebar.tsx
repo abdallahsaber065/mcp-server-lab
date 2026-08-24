@@ -118,10 +118,8 @@ export const Sidebar: React.FC = () => {
             <div className="space-y-1">
               {navItem('dashboard', 'Role Dashboard', LayoutDashboard)}
               {navItem('chat', 'Multi-Agent Chat Studio', MessageSquare, 'SSE')}
-              {(role === 'property_manager' || role === 'executive_admin') &&
-                navItem('stateGraph', 'State Graph Studio', GitBranch, 'Flow')}
-              {role === 'executive_admin' &&
-                navItem('admin', 'Admin Command Center', ShieldCheck, 'HITL')}
+              {navItem('stateGraph', 'State Graph Studio', GitBranch, 'Flow')}
+              {navItem('admin', 'My Tasks & Reviews', ShieldCheck, role === 'executive_admin' ? 'HITL' : 'Review')}
             </div>
           </div>
         )}

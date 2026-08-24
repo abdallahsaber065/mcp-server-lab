@@ -6,7 +6,7 @@ with full PostgreSQL and SQLite compatibility.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import delete, select, update
@@ -97,7 +97,7 @@ class ChatRepository(BaseRepository[ChatSession]):
             init_title = (content.strip()[:40] + ("..." if len(content.strip()) > 40 else "")) if (msg_type == "user" and content) else "New conversation"
             self.create_chat_session(session_id=session_id, title=init_title)
         else:
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
             if msg_type == "user" and content and (not existing.title or existing.title in ["محادثة جديدة", "New conversation", "New Conversation"]):
                 existing.title = content.strip()[:40] + ("..." if len(content.strip()) > 40 else "")
 
@@ -122,7 +122,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         chat_sess = self.session.get(ChatSession, session_id)
         if chat_sess:
             chat_sess.title = title
-            chat_sess.updated_at = datetime.utcnow()
+            chat_sess.updated_at = datetime.now(timezone.utc)
             self.session.commit()
             return True
         return False
@@ -131,7 +131,7 @@ class ChatRepository(BaseRepository[ChatSession]):
         chat_sess = self.session.get(ChatSession, session_id)
         if chat_sess:
             chat_sess.user_role = role
-            chat_sess.updated_at = datetime.utcnow()
+            chat_sess.updated_at = datetime.now(timezone.utc)
             self.session.commit()
             return True
         return False
@@ -237,7 +237,7 @@ class AsyncChatRepository(AsyncBaseRepository[ChatSession]):
             init_title = (content.strip()[:40] + ("..." if len(content.strip()) > 40 else "")) if (msg_type == "user" and content) else "New conversation"
             await self.create_chat_session(session_id=session_id, title=init_title, user_id=user_id)
         else:
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
             if user_id is not None and existing.user_id is None:
                 existing.user_id = user_id
             if msg_type == "user" and content and (not existing.title or existing.title in ["محادثة جديدة", "New conversation", "New Conversation"]):
@@ -264,7 +264,7 @@ class AsyncChatRepository(AsyncBaseRepository[ChatSession]):
         chat_sess = await self.session.get(ChatSession, session_id)
         if chat_sess:
             chat_sess.title = title
-            chat_sess.updated_at = datetime.utcnow()
+            chat_sess.updated_at = datetime.now(timezone.utc)
             await self.session.commit()
             return True
         return False
@@ -273,7 +273,7 @@ class AsyncChatRepository(AsyncBaseRepository[ChatSession]):
         chat_sess = await self.session.get(ChatSession, session_id)
         if chat_sess:
             chat_sess.user_role = role
-            chat_sess.updated_at = datetime.utcnow()
+            chat_sess.updated_at = datetime.now(timezone.utc)
             await self.session.commit()
             return True
         return False

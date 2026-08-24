@@ -18,10 +18,12 @@ import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ChatStudioPage } from './pages/chat/ChatStudioPage';
 import { StateGraphPage } from './pages/stateGraph/StateGraphPage';
 import { AdminCenterPage } from './pages/admin/AdminCenterPage';
+import { useNotificationStream } from './hooks/useNotificationStream';
 
 export const App: React.FC = () => {
   const { checkAuth, isAuthenticated } = useAuthStore();
   const { currentPage, setCurrentPage } = useAppStore();
+  useNotificationStream(isAuthenticated);
 
   useEffect(() => {
     checkAuth();

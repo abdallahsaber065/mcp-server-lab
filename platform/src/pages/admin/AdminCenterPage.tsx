@@ -15,12 +15,70 @@ import {
   RefreshCw,
   Layers,
   Wrench,
+  Eye,
 } from 'lucide-react';
 import { apiClient } from '../../services/api';
 import { useAppStore } from '../../stores/useAppStore';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { HITLDetailModal } from '../../components/admin/HITLDetailModal';
+
+const ROLE_CONFIG: Record<string, { title: string; subtitle: string; icon: string; hitlFilter: (t: any) => boolean; ticketFilter: (t: any) => boolean }> = {
+  accountant: {
+    title: 'Accountant Verification Center',
+    subtitle: 'راجع مطابقة إيصالات 144,000 ج.م مع استخراج Gemini Vision وأكّد وصول المبلغ — كل طلب يظهر كـ HITL حتى تأكيدك.',
+    icon: 'accountant',
+    hitlFilter: (t) => t.node?.includes('accountant') || t.node?.includes('verify_receipt'),
+    ticketFilter: (t) => t.node?.includes('verify_receipt') || t.error_type?.includes('Duplicate'),
+  },
+  chief_engineer: {
+    title: 'Engineering Command Center',
+    subtitle: 'اعتمد أوامر الشغل >10,000 ج.م ومفاضلة LATS بين 3 مقاولين — القرار يحدد مسار التنفيذ أو إعادة المناقصة.',
+    icon: 'engineer',
+    hitlFilter: (t) => t.node?.includes('engineer'),
+    ticketFilter: (t) => t.node?.includes('lats') || t.node?.includes('Contractor'),
+  },
+  legal_counsel: {
+    title: 'Legal & Counsel Review Center',
+    subtitle: 'راجع جدولة المتأخرات واعتمد التسوية — القرار القانوني يفعّل الجدول أو يعيد ToT.',
+    icon: 'legal',
+    hitlFilter: (t) => t.node?.includes('counsel'),
+    ticketFilter: (t) => t.graph_id?.includes('arrears'),
+  },
+  finance_officer: {
+    title: 'Finance & Treasury Center',
+    subtitle: 'دقّق الدفعات والضمانات المالية — نفس طابور المحاسب والقانوني للعرض التوضيحي.',
+    icon: 'finance',
+    hitlFilter: (t) => t.node?.includes('counsel') || t.node?.includes('accountant'),
+    ticketFilter: () => true,
+  },
+  executive_admin: {
+    title: 'Executive Governance Command Center',
+    subtitle: 'Sign off on commercial lease discounts, dynamically manage MCP tool permissions, and inspect failure recovery tickets.',
+    icon: 'executive',
+    hitlFilter: (t) => t.node?.includes('await_bank') || t.node?.includes('execute') || t.node?.includes('counsel') || t.node?.includes('engineer') || t.node?.includes('accountant'),
+    ticketFilter: () => true,
+  },
+  property_manager: {
+    title: 'Property Manager Operations Center',
+    subtitle: 'تابع الصيانة والمناقصات والحجوزات — نفس لوحة المهندس للعرض.',
+    icon: 'manager',
+    hitlFilter: (t) => t.node?.includes('engineer') || t.node?.includes('tenant_completion'),
+    ticketFilter: (t) => t.graph_id?.includes('renovation') || t.graph_id?.includes('maintenance'),
+  },
+  site_supervisor: {
+    title: 'Site Supervisor — Tickets & Dispatch',
+    subtitle: 'تابع تذاكر فشل المقاولين وإعادة التوجيه الميداني.',
+    icon: 'site',
+    hitlFilter: () => false,
+    ticketFilter: () => true,
+  },
+};
 
 export const AdminCenterPage: React.FC = () => {
   const { addToast } = useAppStore();
+  const { user } = useAuthStore();
+  const role = (user?.role as string) || 'executive_admin';
+  const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.executive_admin;
 
   const getInitialTab = (): 'hitl' | 'tools' | 'tickets' | 'rag' => {
     const params = new URLSearchParams(window.location.search);
@@ -42,6 +100,7 @@ export const AdminCenterPage: React.FC = () => {
 
   // HITL State
   const [hitlTasks, setHitlTasks] = useState<any[]>([]);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
 
   // Tool Matrix State
   const [selectedAgent, setSelectedAgent] = useState('commercial_lease_agent');
@@ -89,6 +148,13 @@ export const AdminCenterPage: React.FC = () => {
     loadTools(selectedAgent);
     loadTickets();
   }, [selectedAgent]);
+
+  const visibleHitl = hitlTasks.filter(cfg.hitlFilter);
+  const visibleTickets = tickets.filter(cfg.ticketFilter);
+  const isAdmin = role === 'executive_admin';
+  useEffect(() => {
+    if (!isAdmin && (activeTab === 'tools' || activeTab === 'rag')) setActiveTab('hitl');
+  }, [isAdmin, activeTab]);
 
   const handleResolveHITL = async (taskId: string, decision: 'approved' | 'rejected') => {
     try {
@@ -162,15 +228,14 @@ export const AdminCenterPage: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-16">
-      {/* Header */}
+      {/* Header — role-aware */}
       <div>
         <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
           <ShieldCheck className="w-6 h-6 text-rose-400" />
-          <span>Executive Governance Command Center</span>
+          <span>{cfg.title}</span>
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">{role}</span>
         </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Sign off on commercial lease discounts, dynamically manage MCP tool permissions, and inspect failure recovery tickets.
-        </p>
+        <p className="text-xs text-slate-400 mt-1" dir={role === 'accountant' || role === 'chief_engineer' || role === 'legal_counsel' ? 'rtl' : undefined}>{cfg.subtitle}</p>
       </div>
 
       {/* Tabs */}
@@ -184,20 +249,20 @@ export const AdminCenterPage: React.FC = () => {
           }`}
         >
           <FileCheck className="w-4 h-4" />
-          <span>HITL Approval Queue ({hitlTasks.length})</span>
+          <span>HITL Queue ({hitlTasks.filter(cfg.hitlFilter).length}/{hitlTasks.length})</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('tools')}
-          className={`px-4 py-2.5 text-xs font-semibold flex items-center space-x-2 border-b-2 transition-colors ${
-            activeTab === 'tools'
-              ? 'border-indigo-400 text-indigo-300'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>Dynamic Tool Matrix</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab('tools')}
+            className={`px-4 py-2.5 text-xs font-semibold flex items-center space-x-2 border-b-2 transition-colors ${
+              activeTab === 'tools' ? 'border-indigo-400 text-indigo-300' : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sliders className="w-4 h-4" />
+            <span>Dynamic Tool Matrix</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('tickets')}
@@ -208,27 +273,27 @@ export const AdminCenterPage: React.FC = () => {
           }`}
         >
           <AlertTriangle className="w-4 h-4" />
-          <span>Failure Tickets ({tickets.length})</span>
+          <span>Failure Tickets ({visibleTickets.length}/{tickets.length})</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('rag')}
-          className={`px-4 py-2.5 text-xs font-semibold flex items-center space-x-2 border-b-2 transition-colors ${
-            activeTab === 'rag'
-              ? 'border-cyan-400 text-cyan-300'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Upload className="w-4 h-4" />
-          <span>RAG Policy Ingestion</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab('rag')}
+            className={`px-4 py-2.5 text-xs font-semibold flex items-center space-x-2 border-b-2 transition-colors ${
+              activeTab === 'rag' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            <span>RAG Policy Ingestion</span>
+          </button>
+        )}
       </div>
 
-      {/* Tab 1: HITL Review Queue */}
+      {/* Tab 1: HITL Review Queue — role-filtered */}
       {activeTab === 'hitl' && (
         <div className="glass-card p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-100">Pending Executive Discount Sign-offs</h2>
+            <h2 className="text-base font-bold text-slate-100">{role === 'accountant' ? 'مهام المحاسب — تأكيد الإيصالات' : role === 'chief_engineer' ? 'مهام المهندس — اعتماد أوامر الشغل' : role === 'legal_counsel' ? 'مهام القانوني — اعتماد الجدولة' : 'Pending Sign-offs'}</h2>
             <button
               onClick={loadHITLTasks}
               className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
@@ -238,16 +303,17 @@ export const AdminCenterPage: React.FC = () => {
             </button>
           </div>
 
-          {hitlTasks.length === 0 ? (
+          {visibleHitl.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl">
-              No state graph runs currently awaiting executive sign-off.
+              No tasks currently awaiting review for your role ({role}).
             </div>
           ) : (
             <div className="space-y-4">
-              {hitlTasks.map((task) => (
+              {visibleHitl.map((task) => (
                 <div
                   key={task.task_id}
-                  className="p-4 rounded-xl bg-slate-950/60 border border-amber-500/30 flex flex-wrap items-center justify-between gap-4"
+                  onClick={() => setSelectedTask(task)}
+                  className="p-4 rounded-xl bg-slate-950/60 border border-amber-500/30 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:border-amber-500/50 hover:bg-slate-900/60 transition-colors"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
@@ -262,14 +328,21 @@ export const AdminCenterPage: React.FC = () => {
 
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => handleResolveHITL(task.task_id, 'approved')}
+                      onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center space-x-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View & Edit</span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleResolveHITL(task.task_id, 'approved'); }}
                       className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center space-x-1 shadow-md shadow-emerald-600/20"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Approve Discount</span>
+                      <span>Approve</span>
                     </button>
                     <button
-                      onClick={() => handleResolveHITL(task.task_id, 'rejected')}
+                      onClick={(e) => { e.stopPropagation(); handleResolveHITL(task.task_id, 'rejected'); }}
                       className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center space-x-1"
                     >
                       <XCircle className="w-3.5 h-3.5" />
@@ -283,8 +356,8 @@ export const AdminCenterPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 2: Dynamic Tool Matrix */}
-      {activeTab === 'tools' && (
+      {/* Tab 2: Dynamic Tool Matrix - admin only */}
+      {isAdmin && activeTab === 'tools' && (
         <div className="glass-card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -332,17 +405,17 @@ export const AdminCenterPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Failure Tickets */}
+      {/* Tab 3: Failure Tickets — role-filtered */}
       {activeTab === 'tickets' && (
         <div className="glass-card p-6 space-y-4">
-          <h2 className="text-base font-bold text-slate-100">State Graph Node Failure Tickets</h2>
-          {tickets.length === 0 ? (
+          <h2 className="text-base font-bold text-slate-100">State Graph Node Failure Tickets {visibleTickets.length !== tickets.length && <span className="text-xs text-slate-400">({visibleTickets.length}/{tickets.length} لدورك)</span>}</h2>
+          {visibleTickets.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl">
-              Zero active failure tickets. All state graph nodes operating cleanly!
+              {tickets.length === 0 ? 'Zero active failure tickets. All nodes operating cleanly!' : 'لا توجد تذاكر لدورك — التذاكر الحالية تخص أدوارًا أخرى.'}
             </div>
           ) : (
             <div className="space-y-3">
-              {tickets.map((t) => (
+              {visibleTickets.map((t) => (
                 <div
                   key={t.ticket_id}
                   className="p-4 rounded-xl bg-slate-950/60 border border-rose-500/30 flex items-center justify-between"
@@ -369,8 +442,8 @@ export const AdminCenterPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 4: RAG Ingestion */}
-      {activeTab === 'rag' && (
+      {/* Tab 4: RAG Ingestion - admin only */}
+      {isAdmin && activeTab === 'rag' && (
         <div className="glass-card p-6 space-y-4 max-w-2xl">
           <h2 className="text-base font-bold text-slate-100">Ingest Regulatory Document / Bylaw</h2>
           <form onSubmit={handleIngestRAG} className="space-y-3">
@@ -422,6 +495,7 @@ export const AdminCenterPage: React.FC = () => {
           </form>
         </div>
       )}
+      <HITLDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onResolved={loadHITLTasks} />
     </div>
   );
 };

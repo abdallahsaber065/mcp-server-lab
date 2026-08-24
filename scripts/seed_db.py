@@ -23,6 +23,9 @@ from sqlalchemy import select, text
 from db.models import (
     AgentToolBinding,
     Base,
+    GraphCheckpoint,
+    GraphFailureTicket,
+    HITLTask,
     Lease,
     LeaseApplication,
     MaintenanceRequest,
@@ -103,7 +106,8 @@ def seed_sync(reset: bool = False, verbose: bool = True):
         tenants_data = load_json("tenants.json")
         for item in tenants_data:
             d = dict(item)
-            default_pass = "AdminPass123!" if d.get("role") == "executive_admin" else ("ManagerPass123!" if d.get("role") == "property_manager" else "TenantPass123!")
+            role_pass_map = {"executive_admin": "AdminPass123!", "property_manager": "ManagerPass123!", "accountant": "AccountantPass123!", "chief_engineer": "EngineerPass123!", "legal_counsel": "LegalPass123!", "finance_officer": "FinancePass123!", "site_supervisor": "SitePass123!"}
+            default_pass = role_pass_map.get(d.get("role"), "TenantPass123!")
             d["hashed_password"] = AuthService.hash_password(default_pass)
             d["is_active"] = True
             existing = session.get(Tenant, d["tenant_id"])
@@ -215,7 +219,32 @@ def seed_sync(reset: bool = False, verbose: bool = True):
         session.commit()
         log(f"✅ Seeded {len(rag_data)} RAG Documents.")
 
-        # 8. Memory Subsystem (Episodic & Semantic Stores via SQLAlchemy Session)
+        # 7.5 Demo HITL Tasks & Failure Tickets (presentation)
+        try:
+            import json as _json
+            demo_tasks = [
+                {"task_id": "demo-acct-001", "run_id": "demo-run-lease-001", "graph_id": "commercial_lease_flow", "node_name": "accountant_verification", "reason": "محاسب: مطابقة ايصال", "payload_json": _json.dumps({}, ensure_ascii=False), "task_status": "pending"},
+                {"task_id": "demo-eng-001", "run_id": "demo-run-maint-001", "graph_id": "renovation_permit_flow", "node_name": "engineer_hitl_approval", "reason": "مهندس: اعتماد امر", "payload_json": _json.dumps({}, ensure_ascii=False), "task_status": "pending"},
+                {"task_id": "demo-legal-001", "run_id": "demo-run-arrears-001", "graph_id": "rent_arrears_settlement_flow", "node_name": "counsel_hitl_approval", "reason": "قانوني: اعتماد جدولة", "payload_json": _json.dumps({}, ensure_ascii=False), "task_status": "pending"},
+            ]
+            for tt in demo_tasks:
+                existing = session.get(HITLTask, tt["task_id"])
+                if not existing:
+                    session.add(HITLTask(**tt))
+            demo_tickets = [
+                {"ticket_id": "TCK-DEMO-001", "run_id": "demo-run-lease-001", "graph_id": "commercial_lease_flow", "node_name": "verify_receipt_vision", "error_type": "DuplicateTransactionRef", "error_message": "Duplicate", "stack_trace": "Vision", "persisted_state_json": _json.dumps({}, ensure_ascii=False), "ticket_status": "open"},
+                {"ticket_id": "TCK-DEMO-002", "run_id": "demo-run-maint-001", "graph_id": "renovation_permit_flow", "node_name": "lats_vendor_tender_search", "error_type": "ContractorNoShow", "error_message": "Delayed", "stack_trace": "LATS", "persisted_state_json": _json.dumps({}, ensure_ascii=False), "ticket_status": "open"},
+            ]
+            for tk in demo_tickets:
+                existing = session.get(GraphFailureTicket, tk["ticket_id"])
+                if not existing:
+                    session.add(GraphFailureTicket(**tk))
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"HITL seed notice: {e}")
+
+                # 8. Memory Subsystem (Episodic & Semantic Stores via SQLAlchemy Session)
         try:
             ep_store = EpisodicStore(session=session)
             sem_store = SemanticMemoryStore(session=session)
@@ -323,7 +352,8 @@ async def seed_async(reset: bool = False):
         tenants_data = load_json("tenants.json")
         for item in tenants_data:
             d = dict(item)
-            default_pass = "AdminPass123!" if d.get("role") == "executive_admin" else ("ManagerPass123!" if d.get("role") == "property_manager" else "TenantPass123!")
+            role_pass_map = {"executive_admin": "AdminPass123!", "property_manager": "ManagerPass123!", "accountant": "AccountantPass123!", "chief_engineer": "EngineerPass123!", "legal_counsel": "LegalPass123!", "finance_officer": "FinancePass123!", "site_supervisor": "SitePass123!"}
+            default_pass = role_pass_map.get(d.get("role"), "TenantPass123!")
             d["hashed_password"] = AuthService.hash_password(default_pass)
             d["is_active"] = True
             existing = await session.get(Tenant, d["tenant_id"])

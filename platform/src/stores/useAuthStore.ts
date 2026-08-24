@@ -92,14 +92,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  quickLoginAs: async (role: 'executive_admin' | 'property_manager' | 'tenant') => {
-    const creds = {
+  quickLoginAs: async (role: any) => {
+    const creds: Record<string, { email: string; password: string }> = {
       executive_admin: { email: 'admin@cornerstonerealty.eg', password: 'AdminPass123!' },
       property_manager: { email: 'abdallahsaber065@gmail.com', password: 'ManagerPass123!' },
       tenant: { email: 'tarek.mahdy@cairomed.org', password: 'TenantPass123!' },
-    }[role];
-
-    await get().login(creds.email, creds.password);
+      accountant: { email: 'mona.hawary@cornerstonerealty.eg', password: 'AccountantPass123!' },
+      chief_engineer: { email: 'hani.farouk@cornerstonerealty.eg', password: 'EngineerPass123!' },
+      legal_counsel: { email: 'nour.eldin@cornerstonerealty.eg', password: 'LegalPass123!' },
+      finance_officer: { email: 'amira.finance@cornerstonerealty.eg', password: 'FinancePass123!' },
+      site_supervisor: { email: 'omar.zaki@cornerstonerealty.eg', password: 'SitePass123!' },
+    };
+    const c = creds[role];
+    if (!c) throw new Error(`No demo credentials for role ${role}`);
+    await get().login(c.email, c.password);
   },
 
   logout: async () => {
