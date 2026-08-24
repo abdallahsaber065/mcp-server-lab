@@ -120,6 +120,60 @@ class StateGraph:
 
         return state
 
+    async def astream(self, initial_state: GraphState):
+        """Async generator yielding per-node progress for SSE live visualization."""
+        state = initial_state
+        state.status = "RUNNING"
+        if not state.current_node:
+            state.current_node = self.entry_node
+        await self._save_checkpoint_async(state)
+        yield {"type": "checkpoint", "step": state.step_number, "node": state.current_node, "status": state.status, "variables": dict(state.variables), "history": list(state.history)}
+        cycles = 0
+        while state.status == "RUNNING" and state.current_node:
+            cycles += 1
+            if cycles > self.max_cycles:
+                state.status = "FAILED_TICKET"
+                state.last_error = {"type": "MaxCyclesExceeded", "message": f"Loop exceeded safety budget of {self.max_cycles} cycles"}
+                await self._save_checkpoint_async(state)
+                yield {"type": "failed", "status": state.status, "error": state.last_error, "variables": dict(state.variables), "history": list(state.history)}
+                break
+            node_fn = self.nodes.get(state.current_node)
+            if not node_fn:
+                raise ValueError(f"Node '{state.current_node}' not registered in graph '{self.graph_id}'.")
+            prev_node = state.current_node
+            state.step_number += 1
+            yield {"type": "node_start", "node": prev_node, "step": state.step_number, "variables": dict(state.variables)}
+            try:
+                result = await self._execute_node(node_fn, state)
+            except Exception as e:
+                state.status = "FAILED_TICKET"
+                state.last_error = {"type": type(e).__name__, "message": str(e)}
+                await self._save_checkpoint_async(state)
+                yield {"type": "failed", "status": state.status, "error": state.last_error, "node": prev_node, "variables": dict(state.variables), "history": list(state.history)}
+                return
+            state.variables.update(result.updated_variables)
+            state.history.append({"step": state.step_number, "node": prev_node, "status": result.status, "message": result.log_message})
+            if result.status == "PAUSE_HITL":
+                state.status = "PAUSED_HITL"
+                state.pending_hitl = result.hitl_payload
+                state.current_node = result.next_node or state.current_node
+            elif result.status == "WAIT_WEBHOOK":
+                state.status = "AWAITING_WEBHOOK"
+                state.current_node = result.next_node or state.current_node
+            elif result.status == "FAIL":
+                state.status = "FAILED_TICKET"
+                state.last_error = result.error_details or {"message": result.log_message}
+            elif result.status == "FINISH":
+                state.status = "COMPLETED"
+                state.current_node = ""
+            else:
+                state.current_node = result.next_node
+            await self._save_checkpoint_async(state)
+            yield {"type": "node_complete", "node": prev_node, "step": state.step_number, "status": result.status, "message": result.log_message, "next_node": state.current_node, "pending_hitl": state.pending_hitl, "variables": dict(state.variables), "history": list(state.history), "graph_status": state.status}
+            if state.status in ("PAUSED_HITL", "AWAITING_WEBHOOK", "FAILED_TICKET", "COMPLETED"):
+                yield {"type": "final", "run_id": state.run_id, "graph_status": state.status, "current_node": state.current_node, "step_number": state.step_number, "pending_hitl": state.pending_hitl, "last_error": state.last_error, "variables": dict(state.variables), "history": list(state.history)}
+                return
+
     def run(self, initial_state: GraphState) -> GraphState:
         """Synchronous wrapper for arun(). Handles existing running event loops safely."""
         try:

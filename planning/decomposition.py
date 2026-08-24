@@ -56,7 +56,7 @@ def decompose_goal(goal: str, llm: BaseChatModel) -> Plan:
         ("human", f"""Decompose this goal into 3-6 tasks: {goal!r}
 Use short task ids such as t1. Dependencies may refer only to tasks in the plan.
 Preserve the supplied goal exactly in the plan's goal field."""),
-    ], temperature=0.1)
+    ])
     # The caller's goal remains authoritative even if the model paraphrases it.
     payload = generated.model_dump() if hasattr(generated, "model_dump") else dict(generated)
     payload["goal"] = goal

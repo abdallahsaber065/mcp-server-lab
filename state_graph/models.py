@@ -6,10 +6,11 @@ Typed Pydantic models for execution state, transitions, checkpoint snapshots, an
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GraphState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     """Execution state container for a state graph run."""
     run_id: str
     graph_id: str
@@ -27,6 +28,7 @@ class GraphState(BaseModel):
 
 class NodeResult(BaseModel):
     """Result returned by a single state graph node execution."""
+    model_config = ConfigDict(extra="forbid")
     next_node: Optional[str] = None
     status: Literal["CONTINUE", "PAUSE_HITL", "WAIT_WEBHOOK", "FAIL", "FINISH"] = "CONTINUE"
     updated_variables: Dict[str, Any] = Field(default_factory=dict)
